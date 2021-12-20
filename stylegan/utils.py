@@ -3,10 +3,11 @@ import random
 from typing import Literal, Tuple, Union
 
 import torch
-from op import conv2d_gradfix
 from torch import autograd, nn
 from torch.functional import Tensor
 from torch.nn import functional as F
+
+from stylegan.op import conv2d_gradfix
 
 
 # optimize?

@@ -1,0 +1,32 @@
+{
+	"folders": [
+		{
+			"path": "."
+		}
+	],
+	"settings": {
+		"python.analysis.typeCheckingMode": "basic",
+		"C_Cpp.default.includePath": [
+			"/media/ntu/volume1/home/s121md303_02/mambaforge/envs/fyp/lib/python3.9/site-packages/torch/include/torch/csrc/api/include/",
+			"/media/ntu/volume1/home/s121md303_02/mambaforge/envs/fyp/lib/python3.9/site-packages/torch/include/",
+			"/media/ntu/volume1/home/s121md303_02/mambaforge/envs/fyp/include/python3.9/",
+			"/usr/local/cuda/targets/x86_64-linux/include/"
+		],
+		"python.analysis.diagnosticSeverityOverrides": {
+			"reportIncompatibleMethodOverride": "none"
+		},
+		"files.associations": {
+			"*.cu": "cpp",
+			"*.cuh": "cpp",
+			"*.cc": "cpp",
+			"*.hh": "cpp",
+			"*.cc.inc": "cpp",
+			"*.hh.inc": "cpp",
+			"SCons*": "python",
+			"*.md": "markdown",
+			"*.mdx": "markdown",
+			"random": "cpp",
+			"__locale": "cpp"
+		}
+	}
+}

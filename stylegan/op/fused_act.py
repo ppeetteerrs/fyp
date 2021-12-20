@@ -1,11 +1,13 @@
 import os
+from typing import Any, Optional, Tuple
 
 import torch
 from torch import nn
-from torch.nn import functional as F
 from torch.autograd import Function
+from torch.functional import Tensor
+from torch.nn import functional as F
+from torch.nn.parameter import Parameter
 from torch.utils.cpp_extension import load
-
 
 module_path = os.path.dirname(__file__)
 fused = load(
@@ -19,15 +21,24 @@ fused = load(
 
 class FusedLeakyReLUFunctionBackward(Function):
     @staticmethod
-    def forward(ctx, grad_output, out, bias, negative_slope, scale):
-        ctx.save_for_backward(out)
+    def forward(
+        ctx: Any,
+        grad_output: Tensor,
+        out: Tensor,
+        bias: Tensor,
+        negative_slope: float,
+        scale: float,
+    ):
+        # Save context
         ctx.negative_slope = negative_slope
         ctx.scale = scale
+        ctx.save_for_backward(out)
 
+        # Dummy
         empty = grad_output.new_empty(0)
 
-        grad_input = fused.fused_bias_act(
-            grad_output.contiguous(), empty, out, 3, 1, negative_slope, scale
+        grad_input: Tensor = fused.fused_bias_act(
+            grad_output.contiguous(), empty, out, negative_slope, scale
         )
 
         dim = [0]
@@ -39,19 +50,19 @@ class FusedLeakyReLUFunctionBackward(Function):
             grad_bias = grad_input.sum(dim).detach()
 
         else:
-            grad_bias = empty
+            grad_bias = None
 
         return grad_input, grad_bias
 
     @staticmethod
-    def backward(ctx, gradgrad_input, gradgrad_bias):
-        out, = ctx.saved_tensors
-        gradgrad_out = fused.fused_bias_act(
+    def backward(
+        ctx: Any, gradgrad_input: Tensor, gradgrad_bias: Tensor
+    ) -> Tuple[Optional[Tensor], ...]:
+        (out,) = ctx.saved_tensors
+        gradgrad_out: Tensor = fused.fused_bias_act(
             gradgrad_input.contiguous(),
             gradgrad_bias,
             out,
-            3,
-            1,
             ctx.negative_slope,
             ctx.scale,
         )
@@ -61,67 +72,69 @@ class FusedLeakyReLUFunctionBackward(Function):
 
 class FusedLeakyReLUFunction(Function):
     @staticmethod
-    def forward(ctx, input, bias, negative_slope, scale):
+    def forward(
+        ctx: Any,
+        input: Tensor,
+        bias: Optional[Tensor],
+        negative_slope: float,
+        scale: float,
+    ) -> Tensor:
+        # Dummy tensor for unused inputs to C++
         empty = input.new_empty(0)
 
+        # Save bias context
         ctx.bias = bias is not None
 
-        if bias is None:
-            bias = empty
+        bias = empty if bias is None else bias
 
-        out = fused.fused_bias_act(input, bias, empty, 3, 0, negative_slope, scale)
-        ctx.save_for_backward(out)
+        output: Tensor = fused.fused_bias_act(input, bias, empty, negative_slope, scale)
+
+        # Save settings and output to context
         ctx.negative_slope = negative_slope
         ctx.scale = scale
+        ctx.save_for_backward(output)
 
-        return out
+        return output
 
     @staticmethod
-    def backward(ctx, grad_output):
-        out, = ctx.saved_tensors
+    def backward(ctx: Any, grad_output: Tensor) -> Tuple[Optional[Tensor], ...]:
+        (output,) = ctx.saved_tensors
 
         grad_input, grad_bias = FusedLeakyReLUFunctionBackward.apply(
-            grad_output, out, ctx.bias, ctx.negative_slope, ctx.scale
+            grad_output, output, ctx.bias, ctx.negative_slope, ctx.scale
         )
-
-        if not ctx.bias:
-            grad_bias = None
-
         return grad_input, grad_bias, None, None
 
 
 class FusedLeakyReLU(nn.Module):
-    def __init__(self, channel, bias=True, negative_slope=0.2, scale=2 ** 0.5):
+    def __init__(
+        self,
+        n_channels: int,
+        bias: bool = True,
+        negative_slope: float = 0.2,
+        scale: float = 2 ** 0.5,
+    ):
+        """
+        Leaky ReLU with / without learnable biases
+
+            Purpose of scale factor (StyleGAN2 Paper):
+                "To avoid having to account for the activation function in Equation 3, we scale our
+                activation functions so that they retain the expected signal variance
+                (instead of simply initializing with variance-preserving weights)"
+        """
         super().__init__()
-
-        if bias:
-            self.bias = nn.Parameter(torch.zeros(channel))
-
-        else:
-            self.bias = None
-
+        self.bias = Parameter(torch.zeros(n_channels)) if bias else None
         self.negative_slope = negative_slope
         self.scale = scale
 
-    def forward(self, input):
+    def forward(self, input: Tensor) -> Tensor:
         return fused_leaky_relu(input, self.bias, self.negative_slope, self.scale)
 
 
-def fused_leaky_relu(input, bias=None, negative_slope=0.2, scale=2 ** 0.5):
-    if input.device.type == "cpu":
-        if bias is not None:
-            rest_dim = [1] * (input.ndim - bias.ndim - 1)
-            return (
-                F.leaky_relu(
-                    input + bias.view(1, bias.shape[0], *rest_dim), negative_slope=0.2
-                )
-                * scale
-            )
-
-        else:
-            return F.leaky_relu(input, negative_slope=0.2) * scale
-
-    else:
-        return FusedLeakyReLUFunction.apply(
-            input.contiguous(), bias, negative_slope, scale
-        )
+def fused_leaky_relu(
+    input: Tensor,
+    bias: Optional[Tensor] = None,
+    negative_slope: float = 0.2,
+    scale: float = 2 ** 0.5,
+) -> Any:
+    return FusedLeakyReLUFunction.apply(input.contiguous(), bias, negative_slope, scale)

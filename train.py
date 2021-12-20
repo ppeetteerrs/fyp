@@ -11,9 +11,9 @@ from torch.utils.data import DataLoader, DistributedSampler
 from torchvision import transforms, utils
 from tqdm import tqdm
 
-from dataset import MultiResolutionDataset
-from op.model import Discriminator, Generator
+from stylegan.dataset import MultiResolutionDataset
 from stylegan.distributed import reduce_loss_dict, reduce_sum
+from stylegan.model import Discriminator, Generator
 from stylegan.parsers import TrainArgs, get_train_args
 from stylegan.utils import (
     accumulate,
