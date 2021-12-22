@@ -7,7 +7,7 @@ train_parser = ArgumentParser(description="StyleGAN2 trainer")
 train_parser.add_argument("path", type=str, help="path to the lmdb dataset")
 
 train_parser.add_argument(
-    "--iter", type=int, default=800000, help="total training iterations"
+    "--iter", type=int, default=200, help="total training iterations"
 )
 
 train_parser.add_argument(

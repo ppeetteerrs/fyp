@@ -344,6 +344,10 @@ torch::Tensor upfirdn2d_op(
 							(p.major_dim - 1) / p.loop_major + 1);
 	}
 
+	if (mode != 1 && mode != 3 && mode != 5) {
+		std::cout << "MODE: " << mode << std::endl;
+	}
+
 	AT_DISPATCH_FLOATING_TYPES_AND_HALF(x.scalar_type(), "upfirdn2d_cuda", [&] {
 		switch (mode) {
 		case 1:

@@ -19,57 +19,6 @@ fused = load(
 )
 
 
-class FusedLeakyReLUFunctionBackward(Function):
-    @staticmethod
-    def forward(
-        ctx: Any,
-        grad_output: Tensor,
-        out: Tensor,
-        bias: Tensor,
-        negative_slope: float,
-        scale: float,
-    ):
-        # Save context
-        ctx.negative_slope = negative_slope
-        ctx.scale = scale
-        ctx.save_for_backward(out)
-
-        # Dummy
-        empty = grad_output.new_empty(0)
-
-        grad_input: Tensor = fused.fused_bias_act(
-            grad_output.contiguous(), empty, out, negative_slope, scale
-        )
-
-        dim = [0]
-
-        if grad_input.ndim > 2:
-            dim += list(range(2, grad_input.ndim))
-
-        if bias:
-            grad_bias = grad_input.sum(dim).detach()
-
-        else:
-            grad_bias = None
-
-        return grad_input, grad_bias
-
-    @staticmethod
-    def backward(
-        ctx: Any, gradgrad_input: Tensor, gradgrad_bias: Tensor
-    ) -> Tuple[Optional[Tensor], ...]:
-        (out,) = ctx.saved_tensors
-        gradgrad_out: Tensor = fused.fused_bias_act(
-            gradgrad_input.contiguous(),
-            gradgrad_bias,
-            out,
-            ctx.negative_slope,
-            ctx.scale,
-        )
-
-        return gradgrad_out, None, None, None, None
-
-
 class FusedLeakyReLUFunction(Function):
     @staticmethod
     def forward(
@@ -97,13 +46,28 @@ class FusedLeakyReLUFunction(Function):
         return output
 
     @staticmethod
-    def backward(ctx: Any, grad_output: Tensor) -> Tuple[Optional[Tensor], ...]:
+    def backward(
+        ctx: Any,
+        grad_output: Tensor,
+    ) -> Tuple[Optional[Tensor], ...]:
         (output,) = ctx.saved_tensors
+        # Dummy
+        empty = grad_output.new_empty(0)
 
-        grad_input, grad_bias = FusedLeakyReLUFunctionBackward.apply(
-            grad_output, output, ctx.bias, ctx.negative_slope, ctx.scale
+        grad_input: Tensor = fused.fused_bias_act(
+            grad_output.contiguous(), empty, output, ctx.negative_slope, ctx.scale
         )
-        return grad_input, grad_bias, None, None
+
+        dim = [0]
+
+        if grad_input.ndim > 2:
+            dim += list(range(2, grad_input.ndim))
+
+        if ctx.bias:
+            return grad_input, grad_input.sum(dim).detach(), None, None
+
+        else:
+            return grad_input, None, None, None
 
 
 class FusedLeakyReLU(nn.Module):
