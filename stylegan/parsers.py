@@ -1,6 +1,6 @@
 from argparse import ArgumentParser, Namespace
 from pathlib import Path
-from typing import Optional
+from typing import Dict, List, Literal, Optional
 
 train_parser = ArgumentParser(description="StyleGAN2 trainer")
 
@@ -70,12 +70,7 @@ train_parser.add_argument(
 
 train_parser.add_argument("--lr", type=float, default=0.002, help="learning rate")
 
-train_parser.add_argument(
-    "--channel_multiplier",
-    type=int,
-    default=2,
-    help="channel multiplier factor for the model. config-f = 2, else = 1",
-)
+Sizes = Literal[4, 8, 16, 32, 64, 128, 256, 512, 1024]
 
 
 class TrainArgs:
@@ -84,7 +79,7 @@ class TrainArgs:
         self.iter: int = args.iter
         self.batch: int = args.batch
         self.n_sample: int = args.n_sample
-        self.size: int = args.size
+        self.size: Sizes = args.size
         self.r1: float = args.r1
         self.path_regularize: float = args.path_regularize
         self.path_batch_shrink: int = args.path_batch_shrink
@@ -93,12 +88,24 @@ class TrainArgs:
         self.mixing: float = args.mixing
         self.ckpt: Optional[str] = args.ckpt
         self.lr: float = args.lr
-        self.channel_multiplier: int = args.channel_multiplier
-        self.latent: int = 512
+        self.latent_dim: int = 512
         self.n_mlp: int = 8
+        self.lr_mlp_mult: float = 0.01
         self.start_iter: int = 0
         self.n_colors: int = 1
         self.device: str = "cuda"
+        self.blur_kernel: List[int] = [1, 3, 3, 1]
+        self.channels: Dict[Sizes, int] = {
+            4: 512,
+            8: 512,
+            16: 512,
+            32: 512,
+            64: 512,
+            128: 256,
+            256: 128,
+            512: 64,
+            1024: 32,
+        }
 
         Path("results/sample").mkdir(parents=True, exist_ok=True)
         Path("results/checkpoint").mkdir(parents=True, exist_ok=True)

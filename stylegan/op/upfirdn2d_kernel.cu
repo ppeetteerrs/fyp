@@ -7,401 +7,339 @@
 
 #include <ATen/cuda/CUDAApplyUtils.cuh>
 
-static __host__ __device__ __forceinline__ int floor_div(int a, int b) {
+/**
+ * Using macros (((a) + (b) - 1) / (b)) or (((a) - 1) / (b) + 1) are wrong for
+ *non-positive numbers Note that these macros are also not identical in
+ *behaviour, the former is "less wrong"
+ **/
+static __host__ __device__ __forceinline__ int ceil_div(int a, int b) {
 	int c = a / b;
 
-	if (c * b > a) {
-		c--;
+	if (c * b < a) {
+		c++;
 	}
 
 	return c;
 }
 
+/**
+ * Options for UpFirDn kernel launch
+ **/
 struct UpFirDn2DKernelParams {
+	// Up / down sampling factors
 	int up_x;
 	int up_y;
 	int down_x;
 	int down_y;
+
+	// Paddings
 	int pad_x0;
 	int pad_x1;
 	int pad_y0;
 	int pad_y1;
 
-	int major_dim;
+	// Input Dimensions
+	int n;
 	int in_h;
 	int in_w;
-	int minor_dim;
+
+	// Kernel Dimensions
 	int kernel_h;
 	int kernel_w;
+
+	// Output Dimensions
 	int out_h;
 	int out_w;
-	int loop_major;
-	int loop_x;
+
+	// Per-thread loop count along dimension n
+	int loop_n;
 };
 
+/**
+ * Generic implementation of UpFirDn2d (without any caching via shared memory)
+ **/
 template <typename scalar_t>
-__global__ void upfirdn2d_kernel_large(
-	scalar_t *out, const scalar_t *input,
-	const scalar_t			   *kernel,
-	const UpFirDn2DKernelParams p) {
-	int minor_idx = blockIdx.x * blockDim.x + threadIdx.x;
-	int out_y	  = minor_idx / p.minor_dim;
-	minor_idx -= out_y * p.minor_dim;
-	int out_x_base	   = blockIdx.y * p.loop_x * blockDim.y + threadIdx.y;
-	int major_idx_base = blockIdx.z * p.loop_major;
+__global__ void upfirdn2d_kernel_generic(scalar_t* out, const scalar_t* input,
+										 const scalar_t*			 kernel,
+										 const UpFirDn2DKernelParams p) {
+	// Output pixel(s) (base) coordinates
+	const int out_x		 = blockIdx.x * blockDim.x + threadIdx.x;
+	const int out_y		 = blockIdx.y * blockDim.y + threadIdx.y;
+	const int out_n_base = blockIdx.z * p.loop_n;
 
-	if (out_x_base >= p.out_w || out_y >= p.out_h ||
-		major_idx_base >= p.major_dim) {
+	if (out_x >= p.out_w || out_y >= p.out_h || out_n_base >= p.n) {
 		return;
 	}
 
-	int mid_y	 = out_y * p.down_y + p.up_y - 1 - p.pad_y0;
-	int in_y	 = min(max(floor_div(mid_y, p.up_y), 0), p.in_h);
-	int h		 = min(max(floor_div(mid_y + p.kernel_h, p.up_y), 0), p.in_h) - in_y;
-	int kernel_y = mid_y + p.kernel_h - (in_y + 1) * p.up_y;
+	// Calculate middle layer (after upsampling) coordinates
+	const int mid_x = out_x * p.down_x - p.pad_x0;
+	const int mid_y = out_y * p.down_y - p.pad_y0;
 
-	for (int loop_major = 0, major_idx = major_idx_base;
-		 loop_major < p.loop_major && major_idx < p.major_dim;
-		 loop_major++, major_idx++) {
-		for (int loop_x = 0, out_x = out_x_base;
-			 loop_x < p.loop_x && out_x < p.out_w; loop_x++, out_x += blockDim.y) {
-			int mid_x	 = out_x * p.down_x + p.up_x - 1 - p.pad_x0;
-			int in_x	 = min(max(floor_div(mid_x, p.up_x), 0), p.in_w);
-			int w		 = min(max(floor_div(mid_x + p.kernel_w, p.up_x), 0), p.in_w) - in_x;
-			int kernel_x = mid_x + p.kernel_w - (in_x + 1) * p.up_x;
+	const int in_x = min(max(ceil_div(mid_x, p.up_x), 0), p.in_w);
+	const int w =
+		min(max(ceil_div(mid_x + p.kernel_w, p.up_x), 0), p.in_w) - in_x;
+	const int kernel_x = p.kernel_w - 1 + mid_x - in_x * p.up_x;
 
-			const scalar_t *x_p =
-				&input[((major_idx * p.in_h + in_y) * p.in_w + in_x) * p.minor_dim +
-					   minor_idx];
-			const scalar_t *k_p	 = &kernel[kernel_y * p.kernel_w + kernel_x];
-			int				x_px = p.minor_dim;
-			int				k_px = -p.up_x;
-			int				x_py = p.in_w * p.minor_dim;
-			int				k_py = -p.up_y * p.kernel_w;
+	const int in_y = min(max(ceil_div(mid_y, p.up_y), 0), p.in_h);
+	const int h =
+		min(max(ceil_div(mid_y + p.kernel_h, p.up_y), 0), p.in_h) - in_y;
+	const int kernel_y = p.kernel_h - 1 + mid_y - in_y * p.up_y;
 
-			scalar_t v = 0.0f;
+	// Loop over DIM N
+	for (int loop_n = 0, out_n = out_n_base; loop_n < p.loop_n && out_n < p.n;
+		 loop_n++, out_n++) {
+		// Pointer to start of input and kernel
+		const scalar_t* x_p = &input[(out_n * p.in_h + in_y) * p.in_w + in_x];
+		const scalar_t* k_p = &kernel[kernel_y * p.kernel_w + kernel_x];
 
-			for (int y = 0; y < h; y++) {
-				for (int x = 0; x < w; x++) {
-					v += static_cast<scalar_t>(*x_p) * static_cast<scalar_t>(*k_p);
-					x_p += x_px;
-					k_p += k_px;
-				}
+		// Pointer step sizes in DIM x
+		const int x_px = 1;
+		const int k_px = -p.up_x;
 
-				x_p += x_py - w * x_px;
-				k_p += k_py - w * k_px;
+		// Pointer step sizes to move from (end_x, y) to (start_x, y+1)
+		const int x_py = p.in_w - w * x_px;
+		const int k_py = -p.up_y * p.kernel_w - w * k_px;
+
+		scalar_t v = 0.0;
+
+		for (int y = 0; y < h; y++) {
+			for (int x = 0; x < w; x++) {
+				// Accumulate sum-product
+				v += static_cast<scalar_t>(*x_p) * static_cast<scalar_t>(*k_p);
+				// Move pointer in x-direction
+				x_p += x_px;
+				k_p += k_px;
 			}
 
-			out[((major_idx * p.out_h + out_y) * p.out_w + out_x) * p.minor_dim +
-				minor_idx] = v;
+			x_p += x_py;
+			k_p += k_py;
 		}
+
+		// Store output pixel
+		out[(out_n * p.out_h + out_y) * p.out_w + out_x] = v;
 	}
 }
 
+/**
+ * Templated implementation of UpFirDn2d with:
+ * 1. shared memory caching for improved read-access
+ * 2. loop unrolling due to known kernel size
+ *
+ * Note that benefits of shared memory can only be realized fully
+ * if each thread handles more than one pixel
+ *
+ * Each block is reponsible for a tile (e.g. N x 1 x 32 x 32) in
+ * the output image. Threads inside the block split up the work
+ * by looping over loop_n and the tile dimensions.
+ **/
 template <typename scalar_t, int up_x, int up_y, int down_x, int down_y,
 		  int kernel_h, int kernel_w, int tile_out_h, int tile_out_w>
-__global__ void upfirdn2d_kernel(scalar_t *out, const scalar_t *input,
-								 const scalar_t				*kernel,
+__global__ void upfirdn2d_kernel(scalar_t* out, const scalar_t* input,
+								 const scalar_t*			 kernel,
 								 const UpFirDn2DKernelParams p) {
-	// Size of input tile to obtain desired size of output tile (reverse of the previous step in calculating overall output size)
-	const int tile_in_h = ((tile_out_h - 1) * down_y + kernel_h - 1) / up_y + 1;
-	const int tile_in_w = ((tile_out_w - 1) * down_x + kernel_w - 1) / up_x + 1;
+	// Size of input tile to obtain desired size of output tile (reverse of the
+	// previous step in calculating overall output size)
+	constexpr int tile_in_h =
+		((tile_out_h - 1) * down_y + kernel_h - 1) / up_y + 1;
+	constexpr int tile_in_w =
+		((tile_out_w - 1) * down_x + kernel_w - 1) / up_x + 1;
 
-	// Shared kernel and shared x (input)
+	// Shared (transposed) kernel and shared x
 	__shared__ volatile float sk[kernel_h][kernel_w];
 	__shared__ volatile float sx[tile_in_h][tile_in_w];
 
-	/**
-	 * blockIdx.x: loops over height and minor_dim
-	 * y coordinate of current tile is blockIdx.x / p.minor_dim * tile_out_h
-	 * minor_idx = remainder (blockIdx.x / p.minor_dim)
-	 *
-	 */
-	int minor_idx  = blockIdx.x;
-	int tile_out_y = minor_idx / p.minor_dim;
-	minor_idx -= tile_out_y * p.minor_dim;
-	tile_out_y *= tile_out_h;
-	int tile_out_x_base = blockIdx.y * p.loop_x * tile_out_w;
-	int major_idx_base	= blockIdx.z * p.loop_major;
+	// Block Information (no checks on block_out_x < p.out_w cuz it will be
+	// checked on host)
+	const int tile_out_x	  = blockIdx.x * tile_out_w;
+	const int tile_out_y	  = blockIdx.y * tile_out_h;
+	const int tile_out_n_base = blockIdx.z * p.loop_n;
 
-	if (tile_out_x_base >= p.out_w | tile_out_y >= p.out_h |
-		major_idx_base >= p.major_dim) {
+	if (tile_out_x >= p.out_w | tile_out_y >= p.out_h |
+		tile_out_n_base >= p.n) {
 		return;
 	}
 
-	// Load shared kernel
+	// Load shared (transposed) kernel
 	for (int tap_idx = threadIdx.x; tap_idx < kernel_h * kernel_w;
 		 tap_idx += blockDim.x) {
-		int		 ky = tap_idx / kernel_w;
-		int		 kx = tap_idx - ky * kernel_w;
-		scalar_t v	= 0.0;
+		int ky = tap_idx / kernel_w;
+		int kx = tap_idx - ky * kernel_w;
 
-		if (kx < p.kernel_w & ky < p.kernel_h) {
-			v = kernel[(p.kernel_h - 1 - ky) * p.kernel_w + (p.kernel_w - 1 - kx)];
-		}
-
-		sk[ky][kx] = v;
+		sk[ky][kx] =
+			kernel[(p.kernel_h - 1 - ky) * p.kernel_w + (p.kernel_w - 1 - kx)];
 	}
 
-	// Loop over major_dim
-	for (int loop_major = 0, major_idx = major_idx_base;
-		 loop_major < p.loop_major & major_idx < p.major_dim;
-		 loop_major++, major_idx++) {
-		// Loop over tile_x
-		for (int loop_x = 0, tile_out_x = tile_out_x_base;
-			 loop_x < p.loop_x & tile_out_x < p.out_w;
-			 loop_x++, tile_out_x += tile_out_w) {
-			int tile_mid_x = tile_out_x * down_x + up_x - 1 - p.pad_x0;
-			int tile_mid_y = tile_out_y * down_y + up_y - 1 - p.pad_y0;
-			int tile_in_x  = floor_div(tile_mid_x, up_x);
-			int tile_in_y  = floor_div(tile_mid_y, up_y);
+	// Loop over channels
+	for (int loop_n = 0, tile_out_n = tile_out_n_base;
+		 loop_n < p.loop_n & tile_out_n < p.n; loop_n++, tile_out_n++) {
+		// Starting coordinates of block's output tile
+		int tile_mid_x = tile_out_x * down_x - p.pad_x0;
+		int tile_mid_y = tile_out_y * down_y - p.pad_y0;
+		int tile_in_x  = ceil_div(tile_mid_x, up_x);
+		int tile_in_y  = ceil_div(tile_mid_y, up_y);
 
-			__syncthreads();
+		__syncthreads();
 
-			// Load shared input
-			for (int in_idx = threadIdx.x; in_idx < tile_in_h * tile_in_w;
-				 in_idx += blockDim.x) {
-				int rel_in_y = in_idx / tile_in_w;
-				int rel_in_x = in_idx - rel_in_y * tile_in_w;
-				int in_x	 = rel_in_x + tile_in_x;
-				int in_y	 = rel_in_y + tile_in_y;
+		// Load shared input
+		for (int in_idx = threadIdx.x; in_idx < tile_in_h * tile_in_w;
+			 in_idx += blockDim.x) {
+			// Calculate relative coordinates in input
+			int rel_in_y = in_idx / tile_in_w;
+			int rel_in_x = in_idx - rel_in_y * tile_in_w;
+			int in_x	 = rel_in_x + tile_in_x;
+			int in_y	 = rel_in_y + tile_in_y;
 
-				scalar_t v = 0.0;
+			scalar_t v = 0.0;
 
-				if (in_x >= 0 & in_y >= 0 & in_x < p.in_w & in_y < p.in_h) {
-					v = input[((major_idx * p.in_h + in_y) * p.in_w + in_x) *
-								  p.minor_dim +
-							  minor_idx];
-				}
-
-				sx[rel_in_y][rel_in_x] = v;
+			if (in_x >= 0 & in_y >= 0 & in_x < p.in_w & in_y < p.in_h) {
+				v = input[(tile_out_n * p.in_h + in_y) * p.in_w + in_x];
 			}
 
-			// Calculate output
-			__syncthreads();
-			for (int out_idx = threadIdx.x; out_idx < tile_out_h * tile_out_w;
-				 out_idx += blockDim.x) {
-				int rel_out_y = out_idx / tile_out_w;
-				int rel_out_x = out_idx - rel_out_y * tile_out_w;
-				int out_x	  = rel_out_x + tile_out_x;
-				int out_y	  = rel_out_y + tile_out_y;
+			// Imperative to initialize all tensor elements to 0 if not
+			// covered by input
+			sx[rel_in_y][rel_in_x] = v;
+		}
 
-				int mid_x	 = tile_mid_x + rel_out_x * down_x;
-				int mid_y	 = tile_mid_y + rel_out_y * down_y;
-				int in_x	 = floor_div(mid_x, up_x);
-				int in_y	 = floor_div(mid_y, up_y);
-				int rel_in_x = in_x - tile_in_x;
-				int rel_in_y = in_y - tile_in_y;
-				int kernel_x = (in_x + 1) * up_x - mid_x - 1;
-				int kernel_y = (in_y + 1) * up_y - mid_y - 1;
+		__syncthreads();
 
-				scalar_t v = 0.0;
+		// Accumulate output
+		for (int out_idx = threadIdx.x; out_idx < tile_out_h * tile_out_w;
+			 out_idx += blockDim.x) {
+			// Calculate relative coordinates in output
+			int rel_out_y = out_idx / tile_out_w;
+			int rel_out_x = out_idx - rel_out_y * tile_out_w;
+			int out_x	  = rel_out_x + tile_out_x;
+			int out_y	  = rel_out_y + tile_out_y;
+
+			// Calculate cooresponding coordinates in input
+			int mid_x	 = tile_mid_x + rel_out_x * down_x;
+			int mid_y	 = tile_mid_y + rel_out_y * down_y;
+			int in_x	 = ceil_div(mid_x, up_x);
+			int in_y	 = ceil_div(mid_y, up_y);
+			int rel_in_x = in_x - tile_in_x;
+			int rel_in_y = in_y - tile_in_y;
+			int kernel_x = in_x * up_x - mid_x;
+			int kernel_y = in_y * up_y - mid_y;
+
+			scalar_t v = 0.0;
 
 #pragma unroll
-				for (int y = 0; y < kernel_h / up_y; y++)
+			for (int y = 0; y < kernel_h / up_y; y++)
 #pragma unroll
-					for (int x = 0; x < kernel_w / up_x; x++)
-						v += sx[rel_in_y + y][rel_in_x + x] *
-							 sk[kernel_y + y * up_y][kernel_x + x * up_x];
+				for (int x = 0; x < kernel_w / up_x; x++)
+					v += sx[rel_in_y + y][rel_in_x + x] *
+						 sk[kernel_y + y * up_y][kernel_x + x * up_x];
 
-				if (out_x < p.out_w & out_y < p.out_h) {
-					out[((major_idx * p.out_h + out_y) * p.out_w + out_x) * p.minor_dim +
-						minor_idx] = v;
-				}
+			if (out_x < p.out_w & out_y < p.out_h) {
+				out[(tile_out_n * p.out_h + out_y) * p.out_w + out_x] = v;
 			}
 		}
 	}
 }
 
-// Entrypoint of CUDA operation
-torch::Tensor upfirdn2d_op(
-	const torch::Tensor &input,
-	const torch::Tensor &kernel, int up_x, int up_y,
-	int down_x, int down_y, int pad_x0, int pad_x1,
-	int pad_y0, int pad_y1) {
-	// Get current thread's CUDA device (set by DeviceGuard) and stream
-	int curDevice = -1;
-	cudaGetDevice(&curDevice);
+torch::Tensor upfirdn2d_op(const torch::Tensor& input,
+						   const torch::Tensor& kernel, int up_x, int up_y,
+						   int down_x, int down_y, int pad_x0, int pad_x1,
+						   int pad_y0, int pad_y1) {
+	/**
+     * Code in original source, but already removed in NVIDIA's newest
+     *implementation, should be useless int curDevice = -1;
+     * cudaGetDevice(&curDevice);
+     **/
+
+	// Get CUDA stream
 	cudaStream_t stream = at::cuda::getCurrentCUDAStream();
 
-	// Seems extra given that input is already verified to be contiguous
 	auto x = input.contiguous();
 	auto k = kernel.contiguous();
 
-	// N * C, H, W, 1
+	// Get parameters
 	UpFirDn2DKernelParams p;
-	p.major_dim = x.size(0);
-	p.in_h		= x.size(1);
-	p.in_w		= x.size(2);
-	p.minor_dim = x.size(3);
-	p.kernel_h	= k.size(0);
-	p.kernel_w	= k.size(1);
-	p.up_x		= up_x;
-	p.up_y		= up_y;
-	p.down_x	= down_x;
-	p.down_y	= down_y;
-	p.pad_x0	= pad_x0;
-	p.pad_x1	= pad_x1;
-	p.pad_y0	= pad_y0;
-	p.pad_y1	= pad_y1;
+	p.n		   = x.size(0);
+	p.in_h	   = x.size(2);
+	p.in_w	   = x.size(3);
+	p.kernel_h = k.size(0);
+	p.kernel_w = k.size(1);
+	p.up_x	   = up_x;
+	p.up_y	   = up_y;
+	p.down_x   = down_x;
+	p.down_y   = down_y;
+	p.pad_x0   = pad_x0;
+	p.pad_x1   = pad_x1;
+	p.pad_y0   = pad_y0;
+	p.pad_y1   = pad_y1;
 
-	// Out = Ceil((In * Upsample + Paddings - (Kernel - 1)) / Downsample)
-	p.out_h = (p.in_h * p.up_y + p.pad_y0 + p.pad_y1 - p.kernel_h + p.down_y) /
-			  p.down_y;
-	p.out_w = (p.in_w * p.up_x + p.pad_x0 + p.pad_x1 - p.kernel_w + p.down_x) /
-			  p.down_x;
+	// out_dim = ceil((in_dim * upsample + paddings - (kernel_dim - 1)) /
+	// downsample)
+	p.out_h = ceil_div(p.in_h * p.up_y + p.pad_y0 + p.pad_y1 - (p.kernel_h - 1),
+					   p.down_y);
+	p.out_w = ceil_div(p.in_w * p.up_x + p.pad_x0 + p.pad_x1 - (p.kernel_w - 1),
+					   p.down_x);
 
-	// Options: dtype, device, layout
-	auto out =
-		at::empty({p.major_dim, p.out_h, p.out_w, p.minor_dim}, x.options());
+	// Prepare output tensor
+	auto out = at::empty({p.n, 1, p.out_h, p.out_w}, x.options());
 
-	// Selecting upfirdn mode and tile size based on options
+	// Select kernel to use
 	int mode = -1;
 
-	int tile_out_h = -1;
-	int tile_out_w = -1;
-
 	if (p.up_x == 1 && p.up_y == 1 && p.down_x == 1 && p.down_y == 1 &&
-		p.kernel_h <= 4 && p.kernel_w <= 4) {
-		mode	   = 1;
-		tile_out_h = 16;
-		tile_out_w = 64;
-	}
-
-	if (p.up_x == 1 && p.up_y == 1 && p.down_x == 1 && p.down_y == 1 &&
-		p.kernel_h <= 3 && p.kernel_w <= 3) {
-		mode	   = 2;
-		tile_out_h = 16;
-		tile_out_w = 64;
-	}
-
-	if (p.up_x == 2 && p.up_y == 2 && p.down_x == 1 && p.down_y == 1 &&
-		p.kernel_h <= 4 && p.kernel_w <= 4) {
-		mode	   = 3;
-		tile_out_h = 16;
-		tile_out_w = 64;
-	}
-
-	if (p.up_x == 2 && p.up_y == 2 && p.down_x == 1 && p.down_y == 1 &&
-		p.kernel_h <= 2 && p.kernel_w <= 2) {
-		mode	   = 4;
-		tile_out_h = 16;
-		tile_out_w = 64;
-	}
-
-	if (p.up_x == 1 && p.up_y == 1 && p.down_x == 2 && p.down_y == 2 &&
-		p.kernel_h <= 4 && p.kernel_w <= 4) {
-		mode	   = 5;
-		tile_out_h = 8;
-		tile_out_w = 32;
-	}
-
-	if (p.up_x == 1 && p.up_y == 1 && p.down_x == 2 && p.down_y == 2 &&
-		p.kernel_h <= 2 && p.kernel_w <= 2) {
-		mode	   = 6;
-		tile_out_h = 8;
-		tile_out_w = 32;
+		p.kernel_h == 4 && p.kernel_w == 4) {
+		mode = 1;
+	} else if (p.up_x == 2 && p.up_y == 2 && p.down_x == 1 &&
+			   p.down_y == 1 && p.kernel_h == 4 && p.kernel_w == 4) {
+		mode = 2;
+	} else if (p.up_x == 1 && p.up_y == 1 && p.down_x == 2 &&
+			   p.down_y == 2 && p.kernel_h == 4 && p.kernel_w == 4) {
+		mode = 3;
 	}
 
 	dim3 block_size;
 	dim3 grid_size;
 
-	if (tile_out_h > 0 && tile_out_w > 0) {
-		/**
-		 * Arrangement:
-		 *    Each thread responsible for tile of output size (tile_out_h, tile_out_w)
-		 *
-		 *    No. of blocks:
-		 *    (
-		 * 	    x: loop over height and minor_dim
-		 *      y: loop over width
-		 *      z: loop over major_dim, max is 16384
-		 *         (if more, p.loop_major accounts for loop)
-		 *    )
-		 *
-		 *    No. of threads: (256, 1, 1)
-		 *
-		 */
-
-		// ceil(N * C / 16384)
-		p.loop_major = (p.major_dim - 1) / 16384 + 1;
-		p.loop_x	 = 1;
-		// 256 threads per block
-		block_size = dim3(32 * 8, 1, 1);
-		// ceil(out_h / tile_out_h)
-		// ceil(out_w / tile_out_w)
-		// ceil(N * C / ceil(N * C / 16384))
-		grid_size = dim3(((p.out_h - 1) / tile_out_h + 1) * p.minor_dim,
-						 (p.out_w - 1) / (p.loop_x * tile_out_w) + 1,
-						 (p.major_dim - 1) / p.loop_major + 1);
+	// Calculate block and grid sizes
+	if (mode > 0) {
+		p.loop_n   = max(ceil_div(p.n, 16384), 1);
+		block_size = dim3(256, 1, 1);
+		grid_size  = dim3(ceil_div(p.out_w, 32), ceil_div(p.out_h, 32),
+						  ceil_div(p.n, p.loop_n));
 	} else {
-		// Why need loop?
-		p.loop_major = (p.major_dim - 1) / 16384 + 1;
-		p.loop_x	 = 4;
-		block_size	 = dim3(4, 32, 1);
-		grid_size	 = dim3((p.out_h * p.minor_dim - 1) / block_size.x + 1,
-							(p.out_w - 1) / (p.loop_x * block_size.y) + 1,
-							(p.major_dim - 1) / p.loop_major + 1);
+		p.loop_n   = max(ceil_div(p.n, 16384), 8);
+		block_size = dim3(32, 32, 1);
+		grid_size =
+			dim3(ceil_div(p.out_w, block_size.x),
+				 ceil_div(p.out_h, block_size.y), ceil_div(p.n, p.loop_n));
 	}
 
-	if (mode != 1 && mode != 3 && mode != 5) {
-		std::cout << "MODE: " << mode << std::endl;
-	}
-
+	// Dispatch kernel
 	AT_DISPATCH_FLOATING_TYPES_AND_HALF(x.scalar_type(), "upfirdn2d_cuda", [&] {
 		switch (mode) {
 		case 1:
-			upfirdn2d_kernel<scalar_t, 1, 1, 1, 1, 4, 4, 16, 64>
-				<<<grid_size, block_size, 0, stream>>>(out.data_ptr<scalar_t>(),
-													   x.data_ptr<scalar_t>(),
-													   k.data_ptr<scalar_t>(), p);
-
+			upfirdn2d_kernel<scalar_t, 1, 1, 1, 1, 4, 4, 32, 32>
+				<<<grid_size, block_size, 0, stream>>>(
+					out.data_ptr<scalar_t>(), x.data_ptr<scalar_t>(),
+					k.data_ptr<scalar_t>(), p);
 			break;
 
 		case 2:
-			upfirdn2d_kernel<scalar_t, 1, 1, 1, 1, 3, 3, 16, 64>
-				<<<grid_size, block_size, 0, stream>>>(out.data_ptr<scalar_t>(),
-													   x.data_ptr<scalar_t>(),
-													   k.data_ptr<scalar_t>(), p);
-
+			upfirdn2d_kernel<scalar_t, 2, 2, 1, 1, 4, 4, 32, 32>
+				<<<grid_size, block_size, 0, stream>>>(
+					out.data_ptr<scalar_t>(), x.data_ptr<scalar_t>(),
+					k.data_ptr<scalar_t>(), p);
 			break;
 
 		case 3:
-			upfirdn2d_kernel<scalar_t, 2, 2, 1, 1, 4, 4, 16, 64>
-				<<<grid_size, block_size, 0, stream>>>(out.data_ptr<scalar_t>(),
-													   x.data_ptr<scalar_t>(),
-													   k.data_ptr<scalar_t>(), p);
-
-			break;
-
-		case 4:
-			upfirdn2d_kernel<scalar_t, 2, 2, 1, 1, 2, 2, 16, 64>
-				<<<grid_size, block_size, 0, stream>>>(out.data_ptr<scalar_t>(),
-													   x.data_ptr<scalar_t>(),
-													   k.data_ptr<scalar_t>(), p);
-
-			break;
-
-		case 5:
-			upfirdn2d_kernel<scalar_t, 1, 1, 2, 2, 4, 4, 8, 32>
-				<<<grid_size, block_size, 0, stream>>>(out.data_ptr<scalar_t>(),
-													   x.data_ptr<scalar_t>(),
-													   k.data_ptr<scalar_t>(), p);
-
-			break;
-
-		case 6:
-			upfirdn2d_kernel<scalar_t, 1, 1, 2, 2, 4, 4, 8, 32>
-				<<<grid_size, block_size, 0, stream>>>(out.data_ptr<scalar_t>(),
-													   x.data_ptr<scalar_t>(),
-													   k.data_ptr<scalar_t>(), p);
-
+			upfirdn2d_kernel<scalar_t, 1, 1, 2, 2, 4, 4, 32, 32>
+				<<<grid_size, block_size, 0, stream>>>(
+					out.data_ptr<scalar_t>(), x.data_ptr<scalar_t>(),
+					k.data_ptr<scalar_t>(), p);
 			break;
 
 		default:
-			upfirdn2d_kernel_large<scalar_t><<<grid_size, block_size, 0, stream>>>(
-				out.data_ptr<scalar_t>(), x.data_ptr<scalar_t>(),
-				k.data_ptr<scalar_t>(), p);
+			upfirdn2d_kernel_generic<scalar_t>
+				<<<grid_size, block_size, 0, stream>>>(
+					out.data_ptr<scalar_t>(), x.data_ptr<scalar_t>(),
+					k.data_ptr<scalar_t>(), p);
+			break;
 		}
 	});
 

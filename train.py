@@ -22,7 +22,6 @@ from stylegan.utils import (
     g_nonsaturating_loss,
     g_path_regularize,
     mixing_noise,
-    requires_grad,
 )
 
 
@@ -67,8 +66,8 @@ def train(
         real_img = next(loader).to(args.device)
 
         # Only trains discriminator
-        requires_grad(generator, False)
-        requires_grad(discriminator, True)
+        generator.requires_grad_(False)
+        discriminator.requires_grad_(True)
 
         # Get noise style(s)
         noise = mixing_noise(args.batch, args.latent, args.mixing, args.device)
@@ -102,8 +101,8 @@ def train(
         loss_dict["r1"] = r1_loss
 
         # Only trains generator
-        requires_grad(generator, True)
-        requires_grad(discriminator, False)
+        generator.requires_grad_(True)
+        discriminator.requires_grad_(False)
 
         # Get noise style(s)
         noise = mixing_noise(args.batch, args.latent, args.mixing, args.device)
@@ -123,7 +122,7 @@ def train(
         if idx % args.g_reg_every == 0:
             path_batch_size = max(1, args.batch // args.path_batch_shrink)
             noise = mixing_noise(path_batch_size, args.latent, args.mixing, args.device)
-            fake_img, latents = generator(noise, return_latents=True)
+            fake_img, latents = generator(noise)
 
             path_loss, mean_path_length, path_lengths = g_path_regularize(
                 fake_img, latents, mean_path_length
@@ -162,7 +161,7 @@ def train(
                 )
             )
 
-            if idx % 10 == 0:
+            if idx % 100 == 0:
                 with torch.no_grad():
                     g_ema.eval()
                     sample, _ = g_ema([sample_z])
@@ -174,7 +173,7 @@ def train(
                         value_range=(-1, 1),
                     )
 
-            if idx % 50 == 0:
+            if idx % 500 == 0:
                 torch.save(
                     {
                         "g": g_module.state_dict(),
@@ -201,13 +200,18 @@ if __name__ == "__main__":
 
     # Create models
     generator = Generator(
-        args.size, args.latent, args.n_mlp, channel_multiplier=args.channel_multiplier
+        args.size,
+        args.latent_dim,
+        args.n_mlp,
     ).to(args.device)
     discriminator = Discriminator(
-        args.size, channel_multiplier=args.channel_multiplier
+        args.size,
     ).to(args.device)
+    print(discriminator)
     g_ema = Generator(
-        args.size, args.latent, args.n_mlp, channel_multiplier=args.channel_multiplier
+        args.size,
+        args.latent_dim,
+        args.n_mlp,
     ).to(args.device)
     g_ema.eval()
     # Initialize ema model
@@ -277,5 +281,7 @@ if __name__ == "__main__":
         sampler=sampler,
         drop_last=True,
     )
+
+    # default `log_dir` is "runs" - we'll be more specific here
 
     train(args, loader, generator, discriminator, g_optim, d_optim, g_ema)

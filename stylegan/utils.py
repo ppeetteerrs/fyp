@@ -1,20 +1,27 @@
 import math
 import random
-from typing import Literal, Tuple, Union
+from typing import List, Literal, Tuple, Union
 
 import torch
 from torch import autograd, nn
 from torch.functional import Tensor
 from torch.nn import functional as F
 
-from stylegan.op import conv2d_gradfix
 
+def make_kernel(
+    k: List[int],
+    factor: int = 1,
+) -> Tensor:
+    """
+    Creates 2D kernel from 1D kernel, compensating for upsampling factor
+    """
+    kernel = torch.tensor(k, dtype=torch.float32)
 
-# optimize?
-def requires_grad(model: nn.Module, flag: bool) -> None:
-    # for p in model.parameters():
-    #     p.requires_grad = flag
-    model.requires_grad_(flag)
+    kernel = kernel[None, :] * kernel[:, None]
+
+    kernel /= kernel.sum() * (factor ** 2)
+
+    return kernel
 
 
 def accumulate(
@@ -22,6 +29,9 @@ def accumulate(
     model2: nn.Module,
     decay: float = 0.5 ** (32 / (10 * 1000)),
 ) -> None:
+    """
+    Accumulate parameters of model2 onto model1 using EMA
+    """
     par1 = dict(model1.named_parameters())
     par2 = dict(model2.named_parameters())
 
@@ -29,13 +39,13 @@ def accumulate(
         par1[k].data.mul_(decay).add_(par2[k].data, alpha=1 - decay)
 
 
-# def sample_data(loader: DataLoader[int]) -> Generator[Tensor, None, None]:
-#     # while True:
-#     for batch in loader:
-#         yield batch
+def d_logistic_loss(
+    real_pred: Tensor,
+    fake_pred: Tensor,
+) -> Tensor:
+    # softplus(-f(x)) + softplus(f(x)) is equivalent
+    # to original adversarial loss function
 
-
-def d_logistic_loss(real_pred: Tensor, fake_pred: Tensor) -> Tensor:
     real_loss = F.softplus(-real_pred)
     fake_loss = F.softplus(fake_pred)
 
@@ -43,10 +53,9 @@ def d_logistic_loss(real_pred: Tensor, fake_pred: Tensor) -> Tensor:
 
 
 def d_r1_loss(real_pred: Tensor, real_img: Tensor) -> Tensor:
-    with conv2d_gradfix.no_weight_gradients():
-        (grad_real,) = autograd.grad(
-            outputs=real_pred.sum(), inputs=real_img, create_graph=True
-        )
+    (grad_real,) = autograd.grad(
+        outputs=real_pred.sum(), inputs=real_img, create_graph=True
+    )
     grad_penalty = grad_real.pow(2).reshape(grad_real.shape[0], -1).sum(1).mean()
 
     return grad_penalty

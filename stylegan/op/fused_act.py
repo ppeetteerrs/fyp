@@ -82,9 +82,7 @@ class FusedLeakyReLU(nn.Module):
         Leaky ReLU with / without learnable biases
 
             Purpose of scale factor (StyleGAN2 Paper):
-                "To avoid having to account for the activation function in Equation 3, we scale our
-                activation functions so that they retain the expected signal variance
-                (instead of simply initializing with variance-preserving weights)"
+                "To avoid having to account for the activation function in Equation 3, we scale our activation functions so that they retain the expected signal variance (instead of simply initializing with variance-preserving weights)"
         """
         super().__init__()
         self.bias = Parameter(torch.zeros(n_channels)) if bias else None
