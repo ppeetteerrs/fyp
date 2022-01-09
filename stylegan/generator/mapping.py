@@ -24,15 +24,15 @@ class Normalize(nn.Module):
 
 
 class MappingNetwork(nn.Sequential):
-    def __init__(self, args: TrainArgs) -> None:
+    def __init__(self, latent_dim: int, n_mlp: int, lr_mlp_mult: float):
         super().__init__(
             Normalize(),
             *[
                 EqualLeakyReLU(
-                    args.latent_dim,
-                    args.latent_dim,
-                    lr_mul=args.lr_mlp_mult,
+                    latent_dim,
+                    latent_dim,
+                    lr_mul=lr_mlp_mult,
                 )
-                for _ in range(args.n_mlp)
+                for _ in range(n_mlp)
             ]
         )

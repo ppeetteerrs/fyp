@@ -1,11 +1,14 @@
 import math
-from typing import Optional
+from typing import List
 
 import torch
-from stylegan.op import fused_leaky_relu
 from torch import nn
 from torch.functional import Tensor
 from torch.nn import functional as F
+
+from stylegan.op import fused_leaky_relu
+from stylegan.op.upfirdn2d import upfirdn2d
+from stylegan.utils import make_kernel
 
 
 class EqualConv2d(nn.Module):
@@ -115,3 +118,55 @@ class EqualLeakyReLU(nn.Module):
         return (
             f"{self.__class__.__name__}({self.weight.shape[1]}, {self.weight.shape[0]})"
         )
+
+
+class Blur(nn.Module):
+    def __init__(self, blur_kernel: List[int], factor: int, kernel_size: int):
+        """
+        Apply blurring FIR filter (before / after) a (downsampling / upsampling) op
+
+        Case 1: Upsample (factor > 0)
+            Applied after a transpose convolution of stride U and kernel size K
+
+        Args:
+            input (Tensor): (N, C, (H - 1) * U + K - 1 + 1, (W - 1) * U + K - 1 + 1)
+            blur_kernel (Tensor): FIR filter
+            factor (int, optional): U. Defaults to 2.
+            kernel_size (int, optional): K. Defaults to 3.
+
+        Returns:
+            Tensor: (N, C, H * U, W * U)
+
+
+        Case 2: Downsample (factor < 0)
+            Applied before a convolution of stride U and kernel size K
+
+        Args:
+            input (Tensor): (N, C, H, W)
+            blur_kernel (Tensor): FIR filter
+            factor (int, optional): U. Defaults to 2.
+            kernel_size (int, optional): K. Defaults to 3.
+
+        Returns:
+            Tensor: (N, C, H - (U + 1) + K - 1, H  - (U + 1) + K - 1)
+        """
+        super().__init__()
+
+        if factor > 0:
+            p = (len(blur_kernel) - factor) - (kernel_size - 1)
+            pad0 = (p + 1) // 2 + factor - 1
+            pad1 = p // 2 + 1
+        else:
+            p = (len(blur_kernel) - abs(factor)) + (kernel_size - 1)
+            pad0 = (p + 1) // 2
+            pad1 = p // 2
+
+        # Factor to compensate for averaging with zeros if upsampling
+        self.kernel: Tensor
+        self.register_buffer(
+            "kernel", make_kernel(blur_kernel, factor if factor > 0 else 1)
+        )
+        self.pad = (pad0, pad1)
+
+    def forward(self, input: Tensor) -> Tensor:
+        return upfirdn2d(input, self.kernel, pad=self.pad)

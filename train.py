@@ -12,8 +12,9 @@ from torchvision import transforms, utils
 from tqdm import tqdm
 
 from stylegan.dataset import MultiResolutionDataset
+from stylegan.discriminator.discriminator import Discriminator
 from stylegan.distributed import reduce_loss_dict, reduce_sum
-from stylegan.model import Discriminator, Generator
+from stylegan.generator.generator import Generator
 from stylegan.parsers import TrainArgs, get_train_args
 from stylegan.utils import (
     accumulate,
@@ -58,7 +59,7 @@ def train(
     g_module = generator.module
     d_module = discriminator.module
 
-    sample_z = torch.randn(args.n_sample, args.latent, device=args.device)
+    sample_z = torch.randn(args.n_sample, args.latent_dim, device=args.device)
 
     for idx in pbar:
 
@@ -70,7 +71,7 @@ def train(
         discriminator.requires_grad_(True)
 
         # Get noise style(s)
-        noise = mixing_noise(args.batch, args.latent, args.mixing, args.device)
+        noise = mixing_noise(args.batch, args.latent_dim, args.mixing, args.device)
         fake_img, _ = generator(noise)
 
         # Train discriminator
@@ -105,7 +106,7 @@ def train(
         discriminator.requires_grad_(False)
 
         # Get noise style(s)
-        noise = mixing_noise(args.batch, args.latent, args.mixing, args.device)
+        noise = mixing_noise(args.batch, args.latent_dim, args.mixing, args.device)
         fake_img, _ = generator(noise)
 
         # Train generator
@@ -121,7 +122,9 @@ def train(
         # Regularize generator
         if idx % args.g_reg_every == 0:
             path_batch_size = max(1, args.batch // args.path_batch_shrink)
-            noise = mixing_noise(path_batch_size, args.latent, args.mixing, args.device)
+            noise = mixing_noise(
+                path_batch_size, args.latent_dim, args.mixing, args.device
+            )
             fake_img, latents = generator(noise)
 
             path_loss, mean_path_length, path_lengths = g_path_regularize(
@@ -161,7 +164,7 @@ def train(
                 )
             )
 
-            if idx % 100 == 0:
+            if idx % 500 == 0:
                 with torch.no_grad():
                     g_ema.eval()
                     sample, _ = g_ema([sample_z])
@@ -173,7 +176,7 @@ def train(
                         value_range=(-1, 1),
                     )
 
-            if idx % 500 == 0:
+            if idx % 5000 == 0:
                 torch.save(
                     {
                         "g": g_module.state_dict(),
@@ -199,21 +202,12 @@ if __name__ == "__main__":
     distributed.barrier()
 
     # Create models
-    generator = Generator(
-        args.size,
-        args.latent_dim,
-        args.n_mlp,
-    ).to(args.device)
-    discriminator = Discriminator(
-        args.size,
-    ).to(args.device)
+    generator = Generator(args).to(args.device)
+    discriminator = Discriminator(args).to(args.device)
     print(discriminator)
-    g_ema = Generator(
-        args.size,
-        args.latent_dim,
-        args.n_mlp,
-    ).to(args.device)
+    g_ema = Generator(args).to(args.device)
     g_ema.eval()
+
     # Initialize ema model
     accumulate(g_ema, generator, 0)
 
