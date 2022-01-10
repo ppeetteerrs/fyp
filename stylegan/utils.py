@@ -19,7 +19,8 @@ def make_kernel(
 
     kernel = kernel[None, :] * kernel[:, None]
 
-    kernel /= kernel.sum() * (factor ** 2)
+    kernel /= kernel.sum()
+    kernel *= factor ** 2
 
     return kernel
 

@@ -1,10 +1,12 @@
 from io import BytesIO
-from typing import Any, Optional
+from typing import Any, Generator, Optional
 
 import lmdb
 from lmdb import Environment
 from PIL import Image
+from torch.functional import Tensor
 from torch.utils.data import Dataset
+from torch.utils.data.dataloader import DataLoader
 from torchvision.transforms import Compose
 
 
@@ -49,3 +51,9 @@ class MultiResolutionDataset(Dataset[int]):
         img = self.transform(Image.open(BytesIO(img_bytes)))
 
         return img
+
+
+def repeat(loader: DataLoader) -> Generator[Tensor, None, None]:
+    while True:
+        for batch in loader:
+            yield batch

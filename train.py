@@ -1,9 +1,11 @@
 import os
-from typing import Iterable
+from pickle import load
+from typing import Generator as GeneratorType
 
 import torch
 from torch import distributed, optim
 from torch.distributed import init_process_group
+from torch.distributed.distributed_c10d import get_rank
 from torch.functional import Tensor
 from torch.nn.parallel import DistributedDataParallel
 from torch.optim.optimizer import Optimizer
@@ -11,7 +13,7 @@ from torch.utils.data import DataLoader, DistributedSampler
 from torchvision import transforms, utils
 from tqdm import tqdm
 
-from stylegan.dataset import MultiResolutionDataset
+from stylegan.dataset import MultiResolutionDataset, repeat
 from stylegan.discriminator.discriminator import Discriminator
 from stylegan.distributed import reduce_loss_dict, reduce_sum
 from stylegan.generator.generator import Generator
@@ -28,15 +30,13 @@ from stylegan.utils import (
 
 def train(
     args: TrainArgs,
-    loader_: DataLoader[int],
+    loader: GeneratorType[Tensor, None, None],
     generator: DistributedDataParallel,
     discriminator: DistributedDataParallel,
     g_optim: Optimizer,
     d_optim: Optimizer,
     g_ema: Generator,
 ):
-    loader: Iterable[Tensor] = iter(loader_)
-
     pbar = range(args.start_iter, args.iter)
 
     if distributed.get_rank() == 0:
@@ -204,7 +204,9 @@ if __name__ == "__main__":
     # Create models
     generator = Generator(args).to(args.device)
     discriminator = Discriminator(args).to(args.device)
-    print(discriminator)
+    # print(generator)
+    # print(discriminator)
+    # exit(1)
     g_ema = Generator(args).to(args.device)
     g_ema.eval()
 
@@ -274,8 +276,10 @@ if __name__ == "__main__":
         batch_size=args.batch,
         sampler=sampler,
         drop_last=True,
+        num_workers=8,
+        prefetch_factor=1,
     )
 
     # default `log_dir` is "runs" - we'll be more specific here
 
-    train(args, loader, generator, discriminator, g_optim, d_optim, g_ema)
+    train(args, repeat(loader), generator, discriminator, g_optim, d_optim, g_ema)

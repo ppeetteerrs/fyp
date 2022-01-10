@@ -17,7 +17,7 @@ train_parser.add_argument(
 train_parser.add_argument(
     "--n_sample",
     type=int,
-    default=32,
+    default=36,
     help="number of the samples generated during training",
 )
 

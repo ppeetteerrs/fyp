@@ -151,12 +151,15 @@ class Generator(nn.Module):
         # Constant input
         out = self.input(w_plus)
 
+        # References for this weird indexing:
+        # https://github.com/NVlabs/stylegan2-ada-pytorch/issues/50
+        # https://github.com/rosinality/stylegan2-pytorch/issues/278
         img = None
         for i in range(self.n_layers - 1):
             if i > 0:
-                out = self.up_convs[i - 1](out, w_plus[:, i - 1], noises_[i - 1])
+                out = self.up_convs[i - 1](out, w_plus[:, i * 2 - 1], noises_[i - 1])
 
-            out = self.convs[i](out, w_plus[:, i], noises_[i])
-            img = self.to_rgbs[i](out, w_plus[:, i + 1], img)
+            out = self.convs[i](out, w_plus[:, i], noises_[i * 2])
+            img = self.to_rgbs[i](out, w_plus[:, i * 2 + 1], img)
 
         return img, w_plus

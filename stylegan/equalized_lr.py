@@ -65,21 +65,21 @@ class EqualLinear(nn.Module):
         in_dim: int,
         out_dim: int,
         bias_init: int = 0,
-        lr_mul: float = 1,
+        lr_mult: float = 1,
     ):
         super().__init__()
 
         # Equalized Learning Rate
-        self.weight = nn.Parameter(torch.randn(out_dim, in_dim).div_(lr_mul))
+        self.weight = nn.Parameter(torch.randn(out_dim, in_dim).div_(lr_mult))
 
         self.bias = nn.Parameter(torch.zeros(out_dim).fill_(bias_init))
 
-        self.scale = (1 / math.sqrt(in_dim)) * lr_mul
+        self.scale = (1 / math.sqrt(in_dim)) * lr_mult
 
-        self.lr_mul = lr_mul
+        self.lr_mult = lr_mult
 
     def forward(self, input: Tensor) -> Tensor:
-        return F.linear(input, self.weight * self.scale, bias=self.bias * self.lr_mul)
+        return F.linear(input, self.weight * self.scale, bias=self.bias * self.lr_mult)
 
     def __repr__(self) -> str:
         return (
@@ -92,27 +92,21 @@ class EqualLeakyReLU(nn.Module):
     Leaky ReLU with equalized learning rate
     """
 
-    def __init__(
-        self,
-        in_dim: int,
-        out_dim: int,
-        lr_mul: float = 1,
-    ):
+    def __init__(self, in_dim: int, out_dim: int, lr_mult: float = 1):
         super().__init__()
 
         # Equalized Learning Rate
-        self.weight = nn.Parameter(torch.randn(out_dim, in_dim).div_(lr_mul))
+        self.weight = nn.Parameter(torch.randn(out_dim, in_dim).div_(lr_mult))
 
         self.bias = nn.Parameter(torch.zeros(out_dim))
 
-        self.scale = (1 / math.sqrt(in_dim)) * lr_mul
+        self.scale = (1 / math.sqrt(in_dim)) * lr_mult
 
-        self.lr_mul = lr_mul
+        self.lr_mult = lr_mult
 
     def forward(self, input: Tensor) -> Tensor:
         out = F.linear(input, self.weight * self.scale)
-        out = fused_leaky_relu(out, self.bias * self.lr_mul)
-        return out
+        return fused_leaky_relu(out, self.bias * self.lr_mult)
 
     def __repr__(self) -> str:
         return (

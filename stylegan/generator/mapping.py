@@ -31,7 +31,7 @@ class MappingNetwork(nn.Sequential):
                 EqualLeakyReLU(
                     latent_dim,
                     latent_dim,
-                    lr_mul=lr_mlp_mult,
+                    lr_mult=lr_mlp_mult,
                 )
                 for _ in range(n_mlp)
             ]
