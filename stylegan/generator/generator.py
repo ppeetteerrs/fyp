@@ -157,9 +157,12 @@ class Generator(nn.Module):
         img = None
         for i in range(self.n_layers - 1):
             if i > 0:
-                out = self.up_convs[i - 1](out, w_plus[:, i * 2 - 1], noises_[i - 1])
+                out = self.up_convs[i - 1](
+                    out, w_plus[:, i * 2 - 1], noises_[i * 2 - 1]
+                )
 
-            out = self.convs[i](out, w_plus[:, i], noises_[i * 2])
+            out = self.convs[i](out, w_plus[:, i * 2], noises_[i * 2])
             img = self.to_rgbs[i](out, w_plus[:, i * 2 + 1], img)
 
         return img, w_plus
+reload
