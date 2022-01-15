@@ -19,7 +19,6 @@
 		"trungngo.autoflake"
 	],
 	"settings": {
-		"terminal.integrated.automationShell.linux": "/bin/bash",
 		"C_Cpp.default.includePath": [
 			"/opt/conda/lib/python3.8/site-packages/torch/include/torch/csrc/api/include/",
 			"/opt/conda/lib/python3.8/site-packages/torch/include/",

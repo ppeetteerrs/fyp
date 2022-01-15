@@ -7,6 +7,8 @@ from torch import autograd, nn
 from torch.functional import Tensor
 from torch.nn import functional as F
 
+from stylegan.op.conv2d_gradfix import no_weight_gradients
+
 
 def make_kernel(
     k: List[int],
@@ -54,9 +56,10 @@ def d_logistic_loss(
 
 
 def d_r1_loss(real_pred: Tensor, real_img: Tensor) -> Tensor:
-    (grad_real,) = autograd.grad(
-        outputs=real_pred.sum(), inputs=real_img, create_graph=True
-    )
+    with no_weight_gradients():
+        (grad_real,) = autograd.grad(
+            outputs=real_pred.sum(), inputs=real_img, create_graph=True
+        )
     grad_penalty = grad_real.pow(2).reshape(grad_real.shape[0], -1).sum(1).mean()
 
     return grad_penalty

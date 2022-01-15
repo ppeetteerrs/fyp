@@ -165,4 +165,3 @@ class Generator(nn.Module):
             img = self.to_rgbs[i](out, w_plus[:, i * 2 + 1], img)
 
         return img, w_plus
-reload

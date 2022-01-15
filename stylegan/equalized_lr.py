@@ -7,6 +7,7 @@ from torch.functional import Tensor
 from torch.nn import functional as F
 
 from stylegan.op import fused_leaky_relu
+from stylegan.op.conv2d_gradfix import conv2d
 from stylegan.op.upfirdn2d import upfirdn2d
 from stylegan.utils import make_kernel
 
@@ -38,14 +39,12 @@ class EqualConv2d(nn.Module):
         self.bias = nn.Parameter(torch.zeros(out_channel)) if bias else None
 
     def forward(self, input: Tensor) -> Tensor:
-        return F.conv2d(
+        return conv2d(
             input=input,
             weight=self.weight * self.scale,
             bias=self.bias,
             stride=self.stride,
             padding=self.padding,
-            dilation=1,
-            groups=1,
         )
 
     def __repr__(self) -> str:

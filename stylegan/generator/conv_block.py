@@ -4,6 +4,7 @@ from typing import List, Optional
 import torch
 from stylegan.equalized_lr import Blur, EqualLinear
 from stylegan.op import upfirdn2d
+from stylegan.op.conv2d_gradfix import conv2d, conv_transpose2d
 from stylegan.op.fused_act import FusedLeakyReLU
 from stylegan.utils import make_kernel
 from torch import nn
@@ -62,7 +63,7 @@ def group_conv(input: Tensor, weight: Tensor) -> Tensor:
     weight = weight.view(batch * out_channel, in_channel, k_h, k_w)
     input = input.view(1, batch * in_channel, height, width)
 
-    out = F.conv2d(input=input, weight=weight, padding="same", groups=batch)
+    out = conv2d(input=input, weight=weight, padding=k_h // 2, groups=batch)
     return out.view(batch, out_channel, height, width)
 
 
@@ -144,8 +145,9 @@ def group_conv_up(input: Tensor, weight: Tensor, up: int = 2) -> Tensor:
 
     weight = weight.transpose(1, 2).reshape(batch * in_channel, out_channel, k_h, k_w)
     input = input.view(1, batch * in_channel, height, width)
-
-    out = F.conv_transpose2d(input=input, weight=weight, stride=up, groups=batch)
+    out = conv_transpose2d(
+        input=input, weight=weight, stride=up, padding=0, groups=batch
+    )
     _, _, out_h, out_w = out.shape
     return out.view(batch, out_channel, out_h, out_w)
 

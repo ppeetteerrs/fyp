@@ -164,7 +164,7 @@ def train(
                 )
             )
 
-            if idx % 500 == 0:
+            if idx % 100 == 0:
                 with torch.no_grad():
                     g_ema.eval()
                     sample, _ = g_ema([sample_z])
@@ -176,7 +176,7 @@ def train(
                         value_range=(-1, 1),
                     )
 
-            if idx % 5000 == 0:
+            if idx % 2000 == 0:
                 torch.save(
                     {
                         "g": g_module.state_dict(),
