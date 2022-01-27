@@ -1,10 +1,7 @@
 import os
 from pickle import load
 from typing import Generator as GeneratorType
-<<<<<<< HEAD
-=======
 from typing import Optional
->>>>>>> tested new version
 
 import torch
 from torch import distributed, optim
@@ -40,10 +37,7 @@ def train(
     g_optim: Optimizer,
     d_optim: Optimizer,
     g_ema: Generator,
-<<<<<<< HEAD
-=======
     sample_z: Optional[Tensor],
->>>>>>> tested new version
 ):
     pbar = range(args.start_iter, args.iter)
 
@@ -67,15 +61,11 @@ def train(
     g_module = generator.module
     d_module = discriminator.module
 
-<<<<<<< HEAD
-    sample_z = torch.randn(args.n_sample, args.latent_dim, device=args.device)
-=======
     sample_z = (
         sample_z
         if sample_z is not None
         else torch.randn(args.n_sample, args.latent_dim, device=args.device)
     )
->>>>>>> tested new version
 
     for idx in pbar:
 
@@ -201,10 +191,7 @@ def train(
                         "g_optim": g_optim.state_dict(),
                         "d_optim": d_optim.state_dict(),
                         "args": args,
-<<<<<<< HEAD
-=======
                         "sample_z": sample_z,
->>>>>>> tested new version
                     },
                     f"results/checkpoint/{str(idx).zfill(6)}.pt",
                 )
@@ -224,12 +211,6 @@ if __name__ == "__main__":
     # Create models
     generator = Generator(args).to(args.device)
     discriminator = Discriminator(args).to(args.device)
-<<<<<<< HEAD
-    # print(generator)
-    # print(discriminator)
-    # exit(1)
-=======
->>>>>>> tested new version
     g_ema = Generator(args).to(args.device)
     g_ema.eval()
 
@@ -252,10 +233,7 @@ if __name__ == "__main__":
     )
 
     # Load checkpoint
-<<<<<<< HEAD
-=======
     sample_z = None
->>>>>>> tested new version
     if args.ckpt is not None:
         print("Loading model:", args.ckpt)
 
@@ -270,10 +248,7 @@ if __name__ == "__main__":
 
         g_optim.load_state_dict(ckpt["g_optim"])
         d_optim.load_state_dict(ckpt["d_optim"])
-<<<<<<< HEAD
-=======
         sample_z = ckpt["sample_z"].to(args.device)
->>>>>>> tested new version
 
     # Setup distributed models
     generator = DistributedDataParallel(
@@ -294,13 +269,7 @@ if __name__ == "__main__":
     transform = transforms.Compose(
         [
             transforms.ToTensor(),
-<<<<<<< HEAD
-            transforms.Normalize(
-                [0.5] * args.n_colors, [0.5] * args.n_colors, inplace=True
-            ),
-=======
             transforms.Normalize(0.5, 0.5, inplace=True),
->>>>>>> tested new version
         ]
     )
 
@@ -311,20 +280,12 @@ if __name__ == "__main__":
         batch_size=args.batch,
         sampler=sampler,
         drop_last=True,
-<<<<<<< HEAD
-        num_workers=8,
-        prefetch_factor=1,
-=======
         num_workers=1,
         prefetch_factor=4,
->>>>>>> tested new version
     )
 
     # default `log_dir` is "runs" - we'll be more specific here
 
-<<<<<<< HEAD
-    train(args, repeat(loader), generator, discriminator, g_optim, d_optim, g_ema)
-=======
     train(
         args,
         repeat(loader),
@@ -335,4 +296,3 @@ if __name__ == "__main__":
         g_ema,
         sample_z,
     )
->>>>>>> tested new version
