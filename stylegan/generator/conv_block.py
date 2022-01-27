@@ -3,13 +3,10 @@ from typing import List, Optional
 
 import torch
 from stylegan.equalized_lr import Blur, EqualLinear
-from stylegan.op import upfirdn2d
 from stylegan.op.conv2d_gradfix import conv2d, conv_transpose2d
 from stylegan.op.fused_act import FusedLeakyReLU
-from stylegan.utils import make_kernel
 from torch import nn
 from torch.functional import Tensor
-from torch.nn import functional as F
 
 
 def mod(weight: Tensor, style: Tensor) -> Tensor:
