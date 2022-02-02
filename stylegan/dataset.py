@@ -35,8 +35,8 @@ class MultiResolutionDataset(Dataset[int]):
 
         # Get dataset length
         with self.env.begin(write=False) as txn:
-            length: Any = txn.get("length".encode("utf-8"))
-            self.length = int(length.decode("utf-8"))
+            length: Any = txn.get("length".encode())
+            self.length = int(length.decode())
 
     def __len__(self) -> int:
         return self.length
@@ -46,7 +46,7 @@ class MultiResolutionDataset(Dataset[int]):
         Get raw bytes from lmdb, turn it into image and transform it
         """
         with self.env.begin(write=False) as txn:
-            key = f"{self.resolution}-{str(index).zfill(5)}".encode("utf-8")
+            key = str(index).zfill(6).encode()
             img_bytes: Any = txn.get(key)
         img = self.transform(Image.open(BytesIO(img_bytes)))
 

@@ -4,7 +4,7 @@ from typing import List, Optional
 import torch
 from stylegan.equalized_lr import EqualLinear
 from stylegan.generator.conv_block import group_conv, mod
-from stylegan.op import upfirdn2d
+from stylegan.op.upfirdn2d import upfirdn2d
 from stylegan.utils import make_kernel
 from torch import nn
 from torch.functional import Tensor

@@ -3,7 +3,7 @@ from typing import List
 
 import torch
 from stylegan.equalized_lr import Blur, EqualConv2d, EqualLeakyReLU, EqualLinear
-from stylegan.op import FusedLeakyReLU
+from stylegan.op.fused_act import FusedLeakyReLU
 from stylegan.parsers import TrainArgs
 from torch import nn
 from torch.functional import Tensor

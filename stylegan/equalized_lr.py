@@ -6,8 +6,8 @@ from torch import nn
 from torch.functional import Tensor
 from torch.nn import functional as F
 
-from stylegan.op import fused_leaky_relu
 from stylegan.op.conv2d_gradfix import conv2d
+from stylegan.op.fused_act import fused_leaky_relu
 from stylegan.op.upfirdn2d import upfirdn2d
 from stylegan.utils import make_kernel
 

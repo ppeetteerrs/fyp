@@ -1,12 +1,12 @@
 import os
-from pickle import load
+import random
 from typing import Generator as GeneratorType
 from typing import Optional
 
+import numpy as np
 import torch
 from torch import distributed, optim
 from torch.distributed import init_process_group
-from torch.distributed.distributed_c10d import get_rank
 from torch.functional import Tensor
 from torch.nn.parallel import DistributedDataParallel
 from torch.optim.optimizer import Optimizer
@@ -28,6 +28,8 @@ from stylegan.utils import (
     mixing_noise,
 )
 
+# torch.use_deterministic_algorithms(True)
+
 
 def train(
     args: TrainArgs,
@@ -47,7 +49,7 @@ def train(
             initial=args.start_iter,
             total=args.iter,
             dynamic_ncols=True,
-            smoothing=0.05,
+            smoothing=0.01,
         )
 
     # Initialize tensors
@@ -200,6 +202,8 @@ def train(
 if __name__ == "__main__":
     # Parse arguments
     args = get_train_args()
+    # torch.backends.cudnn.benchmark = True
+    torch.use_deterministic_algorithms(True)
 
     # Setup distributed processes
     init_process_group(backend="nccl", init_method="env://")
@@ -280,11 +284,9 @@ if __name__ == "__main__":
         batch_size=args.batch,
         sampler=sampler,
         drop_last=True,
-        num_workers=1,
-        prefetch_factor=4,
+        num_workers=2,
+        prefetch_factor=args.batch,
     )
-
-    # default `log_dir` is "runs" - we'll be more specific here
 
     train(
         args,
