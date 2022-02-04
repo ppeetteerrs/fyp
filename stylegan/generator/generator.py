@@ -1,14 +1,15 @@
 import math
 import random
-from typing import List, Literal, Optional, Tuple
+from typing import Dict, List, Literal, Optional, Tuple
 
 import torch
 from stylegan.generator.conv_block import ModConvBlock, UpModConvBlock
 from stylegan.generator.mapping import MappingNetwork
 from stylegan.generator.rgb import ToRGB
-from stylegan.parsers import Sizes, TrainArgs
 from torch import nn
 from torch.functional import Tensor
+from utils.config import CONFIG
+from utils.utils import Resolution
 
 
 class ConstantInput(nn.Module):
@@ -28,23 +29,32 @@ class ConstantInput(nn.Module):
 
 
 class Generator(nn.Module):
-    def __init__(self, args: TrainArgs):
+    def __init__(
+        self,
+        *,
+        resolution: Resolution,
+        latent_dim: int,
+        n_mlp: int,
+        lr_mlp_mult: float,
+        channels: Dict[Resolution, int],
+        blur_kernel: List[int]
+    ):
         super().__init__()
 
-        self.args = args
+        self.latent_dim = latent_dim
 
         # Create mapping network
-        self.mapping = MappingNetwork(args.latent_dim, args.n_mlp, args.lr_mlp_mult)
+        self.mapping = MappingNetwork(latent_dim, n_mlp, lr_mlp_mult)
 
         # Create constant input
-        self.input = ConstantInput(args.channels[4], 4)
+        self.input = ConstantInput(channels[4], 4)
 
         # Create Conv, UpConv and ToRGB Blocks
         self.convs = nn.ModuleList()
         self.up_convs = nn.ModuleList()
         self.to_rgbs = nn.ModuleList()
 
-        self.n_layers = int(math.log(args.size, 2))
+        self.n_layers = int(math.log(resolution, 2))
         self.n_w_plus = self.n_layers * 2 - 2
 
         for layer_idx in range(2, self.n_layers + 1):
@@ -53,54 +63,63 @@ class Generator(nn.Module):
 
             # Calculate image size and channels at the layer
             prev_layer_size = 2 ** (layer_idx - 1)
-            layer_size: Sizes = 2 ** layer_idx
-            layer_channel = args.channels[layer_size]
+            layer_size: Resolution = 2 ** layer_idx
+            layer_channel = channels[layer_size]
 
             # Upsampling Conv Block
             if upsample:
                 self.up_convs.append(
                     UpModConvBlock(
-                        args.channels[prev_layer_size],
+                        channels[prev_layer_size],
                         layer_channel,
                         3,
-                        args.latent_dim,
+                        latent_dim,
                         2,
-                        args.blur_kernel,
+                        blur_kernel,
                     )
                 )
 
             # Normal Conv Block
-            self.convs.append(
-                ModConvBlock(layer_channel, layer_channel, 3, args.latent_dim)
-            )
+            self.convs.append(ModConvBlock(layer_channel, layer_channel, 3, latent_dim))
 
             # ToRGB Block
             self.to_rgbs.append(
                 ToRGB(
                     layer_channel,
-                    args.latent_dim,
+                    latent_dim,
                     2 if upsample else 1,
-                    args.blur_kernel,
+                    blur_kernel,
                 )
             )
+
+    @classmethod
+    def from_config(cls, config: CONFIG) -> "Generator":
+        return cls(
+            resolution=config.RESOLUTION,
+            latent_dim=config.LATENT_DIM,
+            n_mlp=config.N_MLP,
+            lr_mlp_mult=config.LR_MLP_MULT,
+            channels=config.STYLEGAN_CHANNELS,
+            blur_kernel=config.BLUR_KERNEL,
+        )
 
     def make_noise(self) -> List[Tensor]:
         noises = []
 
         for i in range(2, self.n_layers + 1):
             if i > 2:
-                noises.append(
-                    torch.randn(1, 1, 2 ** i, 2 ** i, device=self.args.device)
-                )
+                noises.append(torch.randn(1, 1, 2 ** i, 2 ** i, device="cuda"))
 
-            noises.append(torch.randn(1, 1, 2 ** i, 2 ** i, device=self.args.device))
+            noises.append(torch.randn(1, 1, 2 ** i, 2 ** i, device="cuda"))
 
         return noises
 
     def mean_latent(self, n_sample: int) -> Tensor:
-        return self.mapping(
-            torch.randn(n_sample, self.args.latent_dim, device=self.args.device)
-        ).mean(0, keepdim=True)
+        return (
+            self.mapping(torch.randn(n_sample, self.latent_dim, device="cuda"))
+            .mean(0, keepdim=True)
+            .detach()
+        )
 
     def forward(
         self,
@@ -108,13 +127,14 @@ class Generator(nn.Module):
         input: List[Tensor],
         input_type: Literal["z", "w", "w_plus"] = "z",
         # Truncation options
-        trunc_option: Optional[Tuple[int, Tensor]] = None,
+        trunc_option: Optional[Tuple[float, Tensor]] = None,
         # Mixing regularization options
         mix_index: Optional[int] = None,
         noises: Optional[List[Optional[Tensor]]] = None,
     ):
         # Get w vectors (can have 2 w vectors for mixing regularization)
         ws: List[Tensor]
+
         if input_type == "z":
             ws = [self.mapping(z) for z in input]
         else:
@@ -142,7 +162,6 @@ class Generator(nn.Module):
             w_plus2 = ws[1].unsqueeze(1).repeat(1, self.n_w_plus - mix_index, 1)
 
             w_plus = torch.cat([w_plus1, w_plus2], 1)
-
         # Get noise
         noises_: List[Optional[Tensor]] = (
             noises if noises else [None] * (self.n_w_plus - 1)

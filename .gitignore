@@ -138,4 +138,5 @@ checkpoint
 animation
 generated
 backup
-bk
+output
+pretrained

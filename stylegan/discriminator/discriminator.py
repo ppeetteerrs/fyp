@@ -1,12 +1,13 @@
 import math
-from typing import List
+from typing import Dict, List
 
 import torch
 from stylegan.equalized_lr import Blur, EqualConv2d, EqualLeakyReLU, EqualLinear
 from stylegan.op.fused_act import FusedLeakyReLU
-from stylegan.parsers import TrainArgs
 from torch import nn
 from torch.functional import Tensor
+from utils.config import CONFIG
+from utils.utils import Resolution
 
 
 class ConvBlock(nn.Sequential):
@@ -88,20 +89,22 @@ class ResBlock(nn.Module):
 
 
 class Discriminator(nn.Module):
-    def __init__(self, args: TrainArgs):
+    def __init__(
+        self,
+        *,
+        resolution: Resolution,
+        channels: Dict[Resolution, int],
+        blur_kernel: List[int]
+    ):
         super().__init__()
 
-        self.args = args
-
         # FromRGB followed by ResBlock
-        self.n_layers = int(math.log(args.size, 2))
+        self.n_layers = int(math.log(resolution, 2))
 
         self.blocks = nn.Sequential(
-            ConvBlock(1, args.channels[args.size], 1),
+            ConvBlock(1, channels[resolution], 1),
             *[
-                ResBlock(
-                    args.channels[2 ** i], args.channels[2 ** (i - 1)], args.blur_kernel
-                )
+                ResBlock(channels[2 ** i], channels[2 ** (i - 1)], blur_kernel)
                 for i in range(self.n_layers, 2, -1)
             ],
         )
@@ -111,10 +114,18 @@ class Discriminator(nn.Module):
         self.stddev_feat = 1
 
         # Final layers
-        self.final_conv = ConvBlock(args.channels[4] + 1, args.channels[4], 3)
+        self.final_conv = ConvBlock(channels[4] + 1, channels[4], 3)
         self.final_linear = nn.Sequential(
-            EqualLeakyReLU(args.channels[4] * 4 * 4, args.channels[4]),
-            EqualLinear(args.channels[4], 1),
+            EqualLeakyReLU(channels[4] * 4 * 4, channels[4]),
+            EqualLinear(channels[4], 1),
+        )
+
+    @classmethod
+    def from_config(cls, config: CONFIG) -> "Discriminator":
+        return cls(
+            resolution=config.RESOLUTION,
+            channels=config.STYLEGAN_CHANNELS,
+            blur_kernel=config.BLUR_KERNEL,
         )
 
     def forward(self, input: Tensor) -> Tensor:

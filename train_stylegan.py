@@ -1,9 +1,7 @@
 import os
-import random
 from typing import Generator as GeneratorType
 from typing import Optional
 
-import numpy as np
 import torch
 from torch import distributed, optim
 from torch.distributed import init_process_group
@@ -14,11 +12,10 @@ from torch.utils.data import DataLoader, DistributedSampler
 from torchvision import transforms, utils
 from tqdm import tqdm
 
-from stylegan.dataset import MultiResolutionDataset, repeat
+from stylegan.dataset import MultiResolutionDataset
 from stylegan.discriminator.discriminator import Discriminator
 from stylegan.distributed import reduce_loss_dict, reduce_sum
 from stylegan.generator.generator import Generator
-from stylegan.parsers import TrainArgs, get_train_args
 from stylegan.utils import (
     accumulate,
     d_logistic_loss,
@@ -27,12 +24,12 @@ from stylegan.utils import (
     g_path_regularize,
     mixing_noise,
 )
-
-# torch.use_deterministic_algorithms(True)
+from utils.config import config
+from utils.img import transform
+from utils.utils import repeat
 
 
 def train(
-    args: TrainArgs,
     loader: GeneratorType[Tensor, None, None],
     generator: DistributedDataParallel,
     discriminator: DistributedDataParallel,
@@ -40,22 +37,23 @@ def train(
     d_optim: Optimizer,
     g_ema: Generator,
     sample_z: Optional[Tensor],
+    start_iter: int,
 ):
-    pbar = range(args.start_iter, args.iter)
+    pbar = range(start_iter, config.STYLEGAN_ITER)
 
     if distributed.get_rank() == 0:
         pbar = tqdm(
             pbar,
-            initial=args.start_iter,
-            total=args.iter,
+            initial=start_iter,
+            total=config.STYLEGAN_ITER,
             dynamic_ncols=True,
             smoothing=0.01,
         )
 
     # Initialize tensors
-    r1_loss = torch.tensor(0.0, device=args.device)
-    path_loss = torch.tensor(0.0, device=args.device)
-    path_lengths = torch.tensor(0.0, device=args.device)
+    r1_loss = torch.tensor(0.0, device="cuda")
+    path_loss = torch.tensor(0.0, device="cuda")
+    path_lengths = torch.tensor(0.0, device="cuda")
     mean_path_length = 0
     mean_path_length_avg = 0
     loss_dict = {}
@@ -66,20 +64,22 @@ def train(
     sample_z = (
         sample_z
         if sample_z is not None
-        else torch.randn(args.n_sample, args.latent_dim, device=args.device)
+        else torch.randn(config.STYLEGAN_SAMPLES, config.LATENT_DIM, device="cuda")
     )
 
     for idx in pbar:
 
         # Sample real image
-        real_img = next(loader).to(args.device)
+        real_img = next(loader).to("cuda")
 
         # Only trains discriminator
         generator.requires_grad_(False)
         discriminator.requires_grad_(True)
 
         # Get noise style(s)
-        noise = mixing_noise(args.batch, args.latent_dim, args.mixing, args.device)
+        noise = mixing_noise(
+            config.STYLEGAN_BATCH, config.LATENT_DIM, config.STYLEGAN_MIXING, "cuda"
+        )
         fake_img, _ = generator(noise)
 
         # Train discriminator
@@ -96,14 +96,17 @@ def train(
         d_optim.step()
 
         # Regularize discriminator
-        if idx % args.d_reg_every == 0:
+        if idx % config.STYLEGAN_D_REG_INTERVAL == 0:
             real_img.requires_grad = True
 
             real_pred = discriminator(real_img)
             r1_loss = d_r1_loss(real_pred, real_img)
 
             discriminator.zero_grad()
-            (args.r1 / 2 * r1_loss * args.d_reg_every + 0 * real_pred[0]).backward()
+            (
+                config.STYLEGAN_R1 / 2 * r1_loss * config.STYLEGAN_D_REG_INTERVAL
+                + 0 * real_pred[0]
+            ).backward()
 
             d_optim.step()
 
@@ -114,7 +117,9 @@ def train(
         discriminator.requires_grad_(False)
 
         # Get noise style(s)
-        noise = mixing_noise(args.batch, args.latent_dim, args.mixing, args.device)
+        noise = mixing_noise(
+            config.STYLEGAN_BATCH, config.LATENT_DIM, config.STYLEGAN_MIXING, "cuda"
+        )
         fake_img, _ = generator(noise)
 
         # Train generator
@@ -128,10 +133,12 @@ def train(
         g_optim.step()
 
         # Regularize generator
-        if idx % args.g_reg_every == 0:
-            path_batch_size = max(1, args.batch // args.path_batch_shrink)
+        if idx % config.STYLEGAN_G_REG_INTERVAL == 0:
+            path_batch_size = max(
+                1, config.STYLEGAN_BATCH // config.STYLEGAN_PATH_BATCH_SHRINK
+            )
             noise = mixing_noise(
-                path_batch_size, args.latent_dim, args.mixing, args.device
+                path_batch_size, config.LATENT_DIM, config.STYLEGAN_MIXING, "cuda"
             )
             fake_img, latents = generator(noise)
 
@@ -140,9 +147,11 @@ def train(
             )
 
             generator.zero_grad()
-            weighted_path_loss = args.path_regularize * args.g_reg_every * path_loss
+            weighted_path_loss = (
+                config.STYLEGAN_PATH_REG * config.STYLEGAN_G_REG_INTERVAL * path_loss
+            )
 
-            if args.path_batch_shrink:
+            if config.STYLEGAN_PATH_BATCH_SHRINK:
                 weighted_path_loss += 0 * fake_img[0, 0, 0, 0]
 
             weighted_path_loss.backward()
@@ -179,7 +188,7 @@ def train(
                     utils.save_image(
                         sample,
                         f"results/sample/{str(idx).zfill(6)}.png",
-                        nrow=int(args.n_sample ** 0.5),
+                        nrow=int(config.STYLEGAN_SAMPLES ** 0.5),
                         normalize=True,
                         value_range=(-1, 1),
                     )
@@ -192,7 +201,7 @@ def train(
                         "g_ema": g_ema.state_dict(),
                         "g_optim": g_optim.state_dict(),
                         "d_optim": d_optim.state_dict(),
-                        "args": args,
+                        "config": config,
                         "sample_z": sample_z,
                     },
                     f"results/checkpoint/{str(idx).zfill(6)}.pt",
@@ -200,8 +209,6 @@ def train(
 
 
 if __name__ == "__main__":
-    # Parse arguments
-    args = get_train_args()
     # torch.backends.cudnn.benchmark = True
     torch.use_deterministic_algorithms(True)
 
@@ -213,38 +220,39 @@ if __name__ == "__main__":
     distributed.barrier()
 
     # Create models
-    generator = Generator(args).to(args.device)
-    discriminator = Discriminator(args).to(args.device)
-    g_ema = Generator(args).to(args.device)
+    generator = Generator.from_config(config).to("cuda")
+    discriminator = Discriminator.from_config(config).to("cuda")
+    g_ema = Generator.from_config(config).to("cuda")
     g_ema.eval()
 
     # Initialize ema model
     accumulate(g_ema, generator, 0)
 
     # Setup optimizers
-    g_reg_ratio = args.g_reg_every / (args.g_reg_every + 1)
-    d_reg_ratio = args.d_reg_every / (args.d_reg_every + 1)
+    g_reg_ratio = config.STYLEGAN_G_REG_INTERVAL / (config.STYLEGAN_G_REG_INTERVAL + 1)
+    d_reg_ratio = config.STYLEGAN_D_REG_INTERVAL / (config.STYLEGAN_D_REG_INTERVAL + 1)
 
     g_optim = optim.Adam(
         generator.parameters(),
-        lr=args.lr * g_reg_ratio,
+        lr=config.STYLEGAN_LR * g_reg_ratio,
         betas=(0, 0.99 ** g_reg_ratio),
     )
     d_optim = optim.Adam(
         discriminator.parameters(),
-        lr=args.lr * d_reg_ratio,
+        lr=config.STYLEGAN_LR * d_reg_ratio,
         betas=(0, 0.99 ** d_reg_ratio),
     )
 
     # Load checkpoint
     sample_z = None
-    if args.ckpt is not None:
-        print("Loading model:", args.ckpt)
+    start_iter = 0
+    if config.STYLEGAN_CKPT is not None:
+        print("Loading model:", config.STYLEGAN_CKPT)
 
-        ckpt = torch.load(args.ckpt, map_location=lambda storage, _: storage)
+        ckpt = torch.load(config.STYLEGAN_CKPT)
 
-        ckpt_name = os.path.basename(args.ckpt)
-        args.start_iter = int(os.path.splitext(ckpt_name)[0])
+        ckpt_name = os.path.basename(config.STYLEGAN_CKPT)
+        start_iter = int(os.path.splitext(ckpt_name)[0])
 
         generator.load_state_dict(ckpt["g"])
         discriminator.load_state_dict(ckpt["d"])
@@ -252,7 +260,7 @@ if __name__ == "__main__":
 
         g_optim.load_state_dict(ckpt["g_optim"])
         d_optim.load_state_dict(ckpt["d_optim"])
-        sample_z = ckpt["sample_z"].to(args.device)
+        sample_z = ckpt["sample_z"].to("cuda")
 
     # Setup distributed models
     generator = DistributedDataParallel(
@@ -270,26 +278,21 @@ if __name__ == "__main__":
     )
 
     # Setup Dataloader
-    transform = transforms.Compose(
-        [
-            transforms.ToTensor(),
-            transforms.Normalize(0.5, 0.5, inplace=True),
-        ]
-    )
 
-    dataset = MultiResolutionDataset(args.path, transform, args.size)
+    dataset = MultiResolutionDataset(
+        str(config.CHEXPERT_TRAIN_LMDB), transform, config.RESOLUTION
+    )
     sampler = DistributedSampler(dataset, shuffle=True)
     loader = DataLoader(
         dataset,
-        batch_size=args.batch,
+        batch_size=config.STYLEGAN_BATCH,
         sampler=sampler,
         drop_last=True,
         num_workers=2,
-        prefetch_factor=args.batch,
+        prefetch_factor=config.STYLEGAN_BATCH,
     )
 
     train(
-        args,
         repeat(loader),
         generator,
         discriminator,
@@ -297,4 +300,5 @@ if __name__ == "__main__":
         d_optim,
         g_ema,
         sample_z,
+        start_iter,
     )
