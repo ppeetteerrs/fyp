@@ -1,6 +1,0 @@
-{
-	"python.analysis.diagnosticSeverityOverrides": {
-		"reportPrivateImportUsage": "none"
-	},
-	"python.sortImports.path": "/home/peter/mambaforge/envs/fyp/bin/isort",
-}

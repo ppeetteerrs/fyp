@@ -181,7 +181,6 @@ class Coach:
         loss: Any = 0.0
         # img_in: CT projection, img_targ: localizer, img_out: generated CXR
         img_loss = img_targ if CONFIG.PSP_USE_LOCALIZER else img_in
-        img_in_rgb = img_in.expand(-1, 3, -1, -1)
         img_out_rgb = img_out.expand(-1, 3, -1, -1)
         img_loss_rgb = img_loss.expand(-1, 3, -1, -1)
 

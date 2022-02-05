@@ -141,3 +141,4 @@ backup
 output
 pretrained
 *.env
+.vscode
