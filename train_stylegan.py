@@ -24,7 +24,7 @@ from stylegan.utils import (
     g_path_regularize,
     mixing_noise,
 )
-from utils.config import config
+from utils.config import CONFIG
 from utils.img import transform
 from utils.utils import repeat
 
@@ -39,13 +39,13 @@ def train(
     sample_z: Optional[Tensor],
     start_iter: int,
 ):
-    pbar = range(start_iter, config.STYLEGAN_ITER)
+    pbar = range(start_iter, CONFIG.STYLEGAN_ITER)
 
     if distributed.get_rank() == 0:
         pbar = tqdm(
             pbar,
             initial=start_iter,
-            total=config.STYLEGAN_ITER,
+            total=CONFIG.STYLEGAN_ITER,
             dynamic_ncols=True,
             smoothing=0.01,
         )
@@ -64,7 +64,7 @@ def train(
     sample_z = (
         sample_z
         if sample_z is not None
-        else torch.randn(config.STYLEGAN_SAMPLES, config.LATENT_DIM, device="cuda")
+        else torch.randn(CONFIG.STYLEGAN_SAMPLES, CONFIG.LATENT_DIM, device="cuda")
     )
 
     for idx in pbar:
@@ -78,7 +78,7 @@ def train(
 
         # Get noise style(s)
         noise = mixing_noise(
-            config.STYLEGAN_BATCH, config.LATENT_DIM, config.STYLEGAN_MIXING, "cuda"
+            CONFIG.STYLEGAN_BATCH, CONFIG.LATENT_DIM, CONFIG.STYLEGAN_MIXING, "cuda"
         )
         fake_img, _ = generator(noise)
 
@@ -96,7 +96,7 @@ def train(
         d_optim.step()
 
         # Regularize discriminator
-        if idx % config.STYLEGAN_D_REG_INTERVAL == 0:
+        if idx % CONFIG.STYLEGAN_D_REG_INTERVAL == 0:
             real_img.requires_grad = True
 
             real_pred = discriminator(real_img)
@@ -104,7 +104,7 @@ def train(
 
             discriminator.zero_grad()
             (
-                config.STYLEGAN_R1 / 2 * r1_loss * config.STYLEGAN_D_REG_INTERVAL
+                CONFIG.STYLEGAN_R1 / 2 * r1_loss * CONFIG.STYLEGAN_D_REG_INTERVAL
                 + 0 * real_pred[0]
             ).backward()
 
@@ -118,7 +118,7 @@ def train(
 
         # Get noise style(s)
         noise = mixing_noise(
-            config.STYLEGAN_BATCH, config.LATENT_DIM, config.STYLEGAN_MIXING, "cuda"
+            CONFIG.STYLEGAN_BATCH, CONFIG.LATENT_DIM, CONFIG.STYLEGAN_MIXING, "cuda"
         )
         fake_img, _ = generator(noise)
 
@@ -133,12 +133,12 @@ def train(
         g_optim.step()
 
         # Regularize generator
-        if idx % config.STYLEGAN_G_REG_INTERVAL == 0:
+        if idx % CONFIG.STYLEGAN_G_REG_INTERVAL == 0:
             path_batch_size = max(
-                1, config.STYLEGAN_BATCH // config.STYLEGAN_PATH_BATCH_SHRINK
+                1, CONFIG.STYLEGAN_BATCH // CONFIG.STYLEGAN_PATH_BATCH_SHRINK
             )
             noise = mixing_noise(
-                path_batch_size, config.LATENT_DIM, config.STYLEGAN_MIXING, "cuda"
+                path_batch_size, CONFIG.LATENT_DIM, CONFIG.STYLEGAN_MIXING, "cuda"
             )
             fake_img, latents = generator(noise)
 
@@ -148,10 +148,10 @@ def train(
 
             generator.zero_grad()
             weighted_path_loss = (
-                config.STYLEGAN_PATH_REG * config.STYLEGAN_G_REG_INTERVAL * path_loss
+                CONFIG.STYLEGAN_PATH_REG * CONFIG.STYLEGAN_G_REG_INTERVAL * path_loss
             )
 
-            if config.STYLEGAN_PATH_BATCH_SHRINK:
+            if CONFIG.STYLEGAN_PATH_BATCH_SHRINK:
                 weighted_path_loss += 0 * fake_img[0, 0, 0, 0]
 
             weighted_path_loss.backward()
@@ -188,7 +188,7 @@ def train(
                     utils.save_image(
                         sample,
                         f"results/sample/{str(idx).zfill(6)}.png",
-                        nrow=int(config.STYLEGAN_SAMPLES ** 0.5),
+                        nrow=int(CONFIG.STYLEGAN_SAMPLES ** 0.5),
                         normalize=True,
                         value_range=(-1, 1),
                     )
@@ -220,38 +220,38 @@ if __name__ == "__main__":
     distributed.barrier()
 
     # Create models
-    generator = Generator.from_config(config).to("cuda")
-    discriminator = Discriminator.from_config(config).to("cuda")
-    g_ema = Generator.from_config(config).to("cuda")
+    generator = Generator.from_config(CONFIG).to("cuda")
+    discriminator = Discriminator.from_config(CONFIG).to("cuda")
+    g_ema = Generator.from_config(CONFIG).to("cuda")
     g_ema.eval()
 
     # Initialize ema model
     accumulate(g_ema, generator, 0)
 
     # Setup optimizers
-    g_reg_ratio = config.STYLEGAN_G_REG_INTERVAL / (config.STYLEGAN_G_REG_INTERVAL + 1)
-    d_reg_ratio = config.STYLEGAN_D_REG_INTERVAL / (config.STYLEGAN_D_REG_INTERVAL + 1)
+    g_reg_ratio = CONFIG.STYLEGAN_G_REG_INTERVAL / (CONFIG.STYLEGAN_G_REG_INTERVAL + 1)
+    d_reg_ratio = CONFIG.STYLEGAN_D_REG_INTERVAL / (CONFIG.STYLEGAN_D_REG_INTERVAL + 1)
 
     g_optim = optim.Adam(
         generator.parameters(),
-        lr=config.STYLEGAN_LR * g_reg_ratio,
+        lr=CONFIG.STYLEGAN_LR * g_reg_ratio,
         betas=(0, 0.99 ** g_reg_ratio),
     )
     d_optim = optim.Adam(
         discriminator.parameters(),
-        lr=config.STYLEGAN_LR * d_reg_ratio,
+        lr=CONFIG.STYLEGAN_LR * d_reg_ratio,
         betas=(0, 0.99 ** d_reg_ratio),
     )
 
     # Load checkpoint
     sample_z = None
     start_iter = 0
-    if config.STYLEGAN_CKPT is not None:
-        print("Loading model:", config.STYLEGAN_CKPT)
+    if CONFIG.STYLEGAN_CKPT is not None:
+        print("Loading model:", CONFIG.STYLEGAN_CKPT)
 
-        ckpt = torch.load(config.STYLEGAN_CKPT)
+        ckpt = torch.load(CONFIG.STYLEGAN_CKPT)
 
-        ckpt_name = os.path.basename(config.STYLEGAN_CKPT)
+        ckpt_name = os.path.basename(CONFIG.STYLEGAN_CKPT)
         start_iter = int(os.path.splitext(ckpt_name)[0])
 
         generator.load_state_dict(ckpt["g"])
@@ -280,16 +280,16 @@ if __name__ == "__main__":
     # Setup Dataloader
 
     dataset = MultiResolutionDataset(
-        str(config.CHEXPERT_TRAIN_LMDB), transform, config.RESOLUTION
+        str(CONFIG.CHEXPERT_TRAIN_LMDB), transform, CONFIG.RESOLUTION
     )
     sampler = DistributedSampler(dataset, shuffle=True)
     loader = DataLoader(
         dataset,
-        batch_size=config.STYLEGAN_BATCH,
+        batch_size=CONFIG.STYLEGAN_BATCH,
         sampler=sampler,
         drop_last=True,
         num_workers=2,
-        prefetch_factor=config.STYLEGAN_BATCH,
+        prefetch_factor=CONFIG.STYLEGAN_BATCH,
     )
 
     train(

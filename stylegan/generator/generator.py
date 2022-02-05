@@ -1,6 +1,6 @@
 import math
 import random
-from typing import Dict, List, Literal, Optional, Tuple
+from typing import Dict, List, Literal, Optional, Tuple, Type
 
 import torch
 from stylegan.generator.conv_block import ModConvBlock, UpModConvBlock
@@ -93,14 +93,14 @@ class Generator(nn.Module):
             )
 
     @classmethod
-    def from_config(cls, config: CONFIG) -> "Generator":
+    def from_config(cls) -> "Generator":
         return cls(
-            resolution=config.RESOLUTION,
-            latent_dim=config.LATENT_DIM,
-            n_mlp=config.N_MLP,
-            lr_mlp_mult=config.LR_MLP_MULT,
-            channels=config.STYLEGAN_CHANNELS,
-            blur_kernel=config.BLUR_KERNEL,
+            resolution=CONFIG.RESOLUTION,
+            latent_dim=CONFIG.LATENT_DIM,
+            n_mlp=CONFIG.N_MLP,
+            lr_mlp_mult=CONFIG.LR_MLP_MULT,
+            channels=CONFIG.STYLEGAN_CHANNELS,
+            blur_kernel=CONFIG.BLUR_KERNEL,
         )
 
     def make_noise(self) -> List[Tensor]:

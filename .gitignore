@@ -140,4 +140,4 @@ generated
 backup
 output
 pretrained
-envs
+*.env

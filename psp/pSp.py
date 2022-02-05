@@ -4,35 +4,45 @@ import torch
 from stylegan.discriminator.discriminator import Discriminator
 from stylegan.generator.generator import Generator
 from torch import Tensor, nn
-from utils.config import config
+from utils.config import CONFIG
 
-from psp.encoder import Encoder, EncoderV2
+from psp.encoder import Encoder, EncoderDeep
 
 
 class pSp(nn.Module):
     def __init__(self):
         super().__init__()
 
-        # self.opts.n_styles = int(math.log(self.opts.output_size, 2)) * 2 - 2
         # Define architecture
-        if config.PSP_ENCODER == "v1":
-            self.encoder = Encoder(resolution=config.RESOLUTION).to("cuda")
+        if CONFIG.PSP_ENCODER == "original":
+            self.encoder = Encoder(resolution=CONFIG.RESOLUTION).to("cuda")
         else:
-            self.encoder = EncoderV2(resolution=config.RESOLUTION).to("cuda")
-        self.decoder = Generator.from_config(config).to("cuda")
-        self.discriminator = Discriminator.from_config(config).to("cuda")
+            self.encoder = EncoderDeep(resolution=CONFIG.RESOLUTION).to("cuda")
+        self.decoder = Generator.from_config().to("cuda")
+
         # Load model checkpoints
-        ckpt = torch.load(str(config.PSP_CKPT))
-        if config.PSP_CKPT_TYPE == "stylegan":
+        ckpt = torch.load(str(CONFIG.PSP_CKPT))
+
+        if CONFIG.PSP_LOSS_ID_DISCRIMINATOR > 0 or CONFIG.PSP_LOSS_DISCRIMINATOR > 0:
+            self.discriminator = Discriminator.from_config().to("cuda")
+        else:
+            self.discriminator = None
+
+        if "g_ema" in ckpt:
             self.decoder.load_state_dict(ckpt["g_ema"], strict=True)
-            self.discriminator.load_state_dict(ckpt["d"], strict=True)
+            if self.discriminator is not None:
+                self.discriminator.load_state_dict(ckpt["d"], strict=True)
+            self.resumed = False
         else:
             self.encoder.load_state_dict(ckpt["encoder"], strict=True)
             self.decoder.load_state_dict(ckpt["decoder"], strict=True)
+            if self.discriminator is not None:
+                self.discriminator.load_state_dict(ckpt["discriminator"], strict=True)
+            self.resumed = True
 
         # Load latent average
         self.latent_avg: Optional[Tensor]
-        if config.PSP_USE_LATENT:
+        if CONFIG.PSP_USE_MEAN:
             if "latent_avg" in ckpt:
                 self.latent_avg = ckpt["latent_avg"]
             else:

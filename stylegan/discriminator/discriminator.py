@@ -1,5 +1,5 @@
 import math
-from typing import Dict, List
+from typing import Dict, List, Tuple, Type, Union
 
 import torch
 from stylegan.equalized_lr import Blur, EqualConv2d, EqualLeakyReLU, EqualLinear
@@ -115,20 +115,20 @@ class Discriminator(nn.Module):
 
         # Final layers
         self.final_conv = ConvBlock(channels[4] + 1, channels[4], 3)
-        self.final_linear = nn.Sequential(
-            EqualLeakyReLU(channels[4] * 4 * 4, channels[4]),
-            EqualLinear(channels[4], 1),
-        )
+        self.final_relu = EqualLeakyReLU(channels[4] * 4 * 4, channels[4])
+        self.final_linear = EqualLinear(channels[4], 1)
 
     @classmethod
-    def from_config(cls, config: CONFIG) -> "Discriminator":
+    def from_config(cls) -> "Discriminator":
         return cls(
-            resolution=config.RESOLUTION,
-            channels=config.STYLEGAN_CHANNELS,
-            blur_kernel=config.BLUR_KERNEL,
+            resolution=CONFIG.RESOLUTION,
+            channels=CONFIG.STYLEGAN_CHANNELS,
+            blur_kernel=CONFIG.BLUR_KERNEL,
         )
 
-    def forward(self, input: Tensor) -> Tensor:
+    def forward(
+        self, input: Tensor, return_features: bool = False
+    ) -> Union[Tensor, Tuple[Tensor, Tensor]]:
         # Downsampling blocks
         out: Tensor = self.blocks(input)
 
@@ -147,4 +147,10 @@ class Discriminator(nn.Module):
 
         # Final layers
         out = self.final_conv(out)
-        return self.final_linear(out.view(batch, -1))
+        features = self.final_relu(out.view(batch, -1))
+        out = self.final_linear(features)
+
+        if return_features:
+            return out, features
+        else:
+            return out

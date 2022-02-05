@@ -1,26 +1,23 @@
-from typing import Tuple
 import torch
 from torch import Tensor, nn
-
 from torch.nn import (
+    AdaptiveAvgPool2d,
+    BatchNorm1d,
     BatchNorm2d,
     Conv2d,
-    PReLU,
-    Sequential,
     Dropout,
     Flatten,
     Linear,
-    BatchNorm1d,
     MaxPool2d,
-    AdaptiveAvgPool2d,
+    PReLU,
     ReLU,
+    Sequential,
     Sigmoid,
 )
+from utils.config import CONFIG
 
-from utils.config import config
 
-
-def l2_norm(input, axis=1):
+def l2_norm(input: Tensor, axis: int = 1) -> Tensor:
     norm = torch.norm(input, 2, axis, True)
     output = torch.div(input, norm)
     return output
@@ -117,7 +114,9 @@ class IDLoss(nn.Module):
     def __init__(self):
         super().__init__()
         self.facenet = Backbone()
-        self.facenet.load_state_dict(torch.load(config.PSP_PRETRAINED / "arcface.pt"))
+        self.facenet.load_state_dict(
+            torch.load(CONFIG.PROJECT_DIR / "pretrained/arcface.pt")
+        )
         self.face_pool = torch.nn.AdaptiveAvgPool2d((112, 112))
         self.facenet.eval()
 
@@ -127,30 +126,27 @@ class IDLoss(nn.Module):
         x_feats = self.facenet(x)
         return x_feats
 
-    def forward(self, y_hat: Tensor, y: Tensor, x: Tensor) -> Tuple[float, float]:
-        n_samples = x.shape[0]
-        x_feats = self.extract_feats(x)
+    def forward(self, y_hat: Tensor, y: Tensor) -> float:
+        n_samples = y.shape[0]
         y_feats = self.extract_feats(y)  # Otherwise use the feature from there
         y_hat_feats = self.extract_feats(y_hat)
         y_feats = y_feats.detach()
         loss = 0
-        sim_improvement = 0
-        # id_logs = []
-        count = 0
         for i in range(n_samples):
             diff_target = y_hat_feats[i].dot(y_feats[i])
-            # diff_input = y_hat_feats[i].dot(x_feats[i])
-            diff_views = y_feats[i].dot(x_feats[i])
-            # id_logs.append(
-            #     {
-            #         "diff_target": float(diff_target),
-            #         "diff_input": float(diff_input),
-            #         "diff_views": float(diff_views),
-            #     }
-            # )
             loss += 1 - diff_target
-            id_diff = float(diff_target) - float(diff_views)
-            sim_improvement += id_diff
-            count += 1
 
-        return loss / count, sim_improvement / count
+        return loss / n_samples
+
+
+class DiscriminatorIDLoss(nn.Module):
+    def forward(self, y_hat_features: Tensor, y_features: Tensor) -> float:
+        n_samples = y_features.shape[0]
+        y_hat_features = l2_norm(y_hat_features)
+        y_features = l2_norm(y_features).detach()
+        loss = 0
+        for i in range(n_samples):
+            diff_target = y_hat_features[i].dot(y_features[i])
+            loss += 1 - diff_target
+
+        return loss / n_samples
