@@ -1,4 +1,3 @@
-import math
 from dataclasses import dataclass, field
 from distutils.util import strtobool
 from os import environ as ENV
@@ -62,6 +61,9 @@ class CONFIG:
     STYLEGAN_LR = float(ENV["STYLEGAN_LR"])
     STYLEGAN_OUTPUT = Path(ENV["PROJECT_DIR"]) / ENV["STYLEGAN_OUTPUT_DIR"]
     PSP_PRETRAINED = Path(ENV["PROJECT_DIR"]) / ENV["PSP_PRETRAINED"]
+    PSP_ENCODER: Literal["v1", "v2"] = (
+        "v1" if ENV["PSP_ENCODER"].lower() == "v1" else "v2"
+    )
     PSP_OPTIM: Literal["ranger", "adam"] = (
         "adam" if ENV["PSP_CKPT_TYPE"].lower() == "adam" else "ranger"
     )
@@ -91,6 +93,7 @@ class CONFIG:
     PSP_LOSS_ID = float(ENV["PSP_LOSS_ID"])
     PSP_LOSS_LPIPS = float(ENV["PSP_LOSS_LPIPS"])
     PSP_LOSS_REG = float(ENV["PSP_LOSS_REG"])
+    PSP_LOSS_DISCRIMINATOR = float(ENV["PSP_LOSS_DISCRIMINATOR"])
 
 
 config = CONFIG()

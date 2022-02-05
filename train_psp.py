@@ -1,7 +1,7 @@
 import os
 from typing import Any, Dict, List, Tuple
 
-import matplotlib
+import lpips
 import torch
 import torch.nn.functional as F
 from torch import Tensor
@@ -11,15 +11,14 @@ from torch.utils.tensorboard import SummaryWriter
 from torchvision.utils import save_image
 from tqdm import tqdm
 
+from psp.loss_fn.id_loss import IDLoss
+from psp.loss_fn.reg_loss import RegLoss
 from psp.pSp import pSp
 from psp.ranger import Ranger
 from utils.config import config
 from utils.img import transform
 from utils.lmdb import LMDBImageDataset, covid_ct_indexer_lung
 from utils.utils import repeat
-from psp.loss_fn.id_loss import IDLoss
-from psp.loss_fn.reg_loss import RegLoss
-import lpips
 
 
 class Coach:
@@ -215,6 +214,13 @@ class Coach:
             loss_lpips = torch.sum(loss_lpips) / img_out_rgb.shape[0]
             loss_dict["loss_lpips"] = float(loss_lpips)
             loss += loss_lpips * config.PSP_LOSS_LPIPS
+
+        if config.PSP_LOSS_DISCRIMINATOR > 0:
+            loss_discriminator: Tensor = F.softplus(
+                -self.net.discriminator.forward(img_out)
+            ).mean()
+            loss_dict["loss_discriminator"] = float(loss_discriminator)
+            loss += loss_discriminator * config.PSP_LOSS_DISCRIMINATOR
 
         # Accumulate loss
         loss_dict["loss"] = float(loss)

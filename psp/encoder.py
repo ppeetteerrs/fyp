@@ -162,3 +162,124 @@ class Encoder(nn.Module):
         latents.extend(layer(combined_64) for layer in self.fine_map)
 
         return torch.stack(latents, dim=1)
+
+
+class EncoderV2(nn.Module):
+    def __init__(self, *, resolution: Resolution):
+        super().__init__()
+
+        self.input_layer = Sequential(
+            Conv2d(1, 32, (3, 3), 1, 1, bias=False),
+            BatchNorm2d(32),
+            PReLU(32),
+        )
+
+        # self.block_N means output from block is of size N x N
+        self.block_512 = DownsampleBlock(in_channel=32, out_channel=32, n_layers=3)
+        self.block_256 = DownsampleBlock(in_channel=32, out_channel=32, n_layers=4)
+        self.block_128 = DownsampleBlock(in_channel=32, out_channel=64, n_layers=4)
+        self.block_64 = DownsampleBlock(in_channel=64, out_channel=64, n_layers=4)
+        self.block_32 = DownsampleBlock(in_channel=64, out_channel=128, n_layers=6)
+        self.block_16 = DownsampleBlock(in_channel=128, out_channel=256, n_layers=3)
+
+        self.map_16 = nn.ModuleList(
+            ToStyle(256, 512, 16)
+            for _ in range(int(math.log(resolution, 2)) * 2 - 2 - 14)
+        )
+        self.map_32 = nn.ModuleList(ToStyle(256, 512, 32) for _ in range(4))
+        self.map_128 = nn.ModuleList(ToStyle(256, 512, 128) for _ in range(6))
+        self.map_512 = nn.ModuleList(ToStyle(256, 512, 512) for _ in range(4))
+
+        self.lateral_32 = nn.Conv2d(128, 256, kernel_size=1, stride=1, padding=0)
+        self.lateral_128 = nn.Conv2d(64, 256, kernel_size=1, stride=1, padding=0)
+        self.lateral_512 = nn.Conv2d(32, 256, kernel_size=1, stride=1, padding=0)
+
+    def upsample_add(self, x: Tensor, y: Tensor) -> Tensor:
+        _, _, H, W = y.size()
+        return F.interpolate(x, size=(H, W), mode="bilinear", align_corners=True) + y
+
+    def forward(self, x: Tensor) -> Tensor:
+        x = self.input_layer(x)
+
+        feature_512 = self.block_512(x)
+        feature_256 = self.block_256(feature_512)
+        feature_128 = self.block_128(feature_256)
+        feature_64 = self.block_64(feature_128)
+        feature_32 = self.block_32(feature_64)
+        feature_16 = self.block_16(feature_32)
+        combined_32 = self.upsample_add(feature_16, self.lateral_32(feature_32))
+        combined_128 = self.upsample_add(combined_32, self.lateral_128(feature_128))
+        combined_512 = self.upsample_add(combined_128, self.lateral_512(feature_512))
+
+        latents = []
+        latents.extend(layer(feature_16) for layer in self.map_16)
+        latents.extend(layer(combined_32) for layer in self.map_32)
+        latents.extend(layer(combined_128) for layer in self.map_128)
+        latents.extend(layer(combined_512) for layer in self.map_512)
+
+        return torch.stack(latents, dim=1)
+
+
+# class EncoderV2(nn.Module):
+#     def __init__(self, *, resolution: Resolution):
+#         super().__init__()
+
+#         self.input_layer = Sequential(
+#             Conv2d(1, 64, (3, 3), 1, 1, bias=False),
+#             BatchNorm2d(64),
+#             PReLU(64),
+#         )
+
+#         # self.block_N means output from block is of size N x N
+#         self.block_512 = DownsampleBlock(in_channel=64, out_channel=64, n_layers=3)
+#         self.block_256 = DownsampleBlock(in_channel=64, out_channel=64, n_layers=4)
+#         self.block_128 = DownsampleBlock(in_channel=64, out_channel=64, n_layers=4)
+#         self.block_64 = DownsampleBlock(in_channel=64, out_channel=64, n_layers=4)
+#         self.block_32 = DownsampleBlock(in_channel=64, out_channel=64, n_layers=6)
+#         self.block_16 = DownsampleBlock(in_channel=64, out_channel=64, n_layers=3)
+
+#         self.map_512 = nn.ModuleList(ToStyle(64, 512, 512) for _ in range(3))
+#         self.map_256 = nn.ModuleList(ToStyle(64, 512, 256) for _ in range(3))
+#         self.map_128 = nn.ModuleList(ToStyle(64, 512, 128) for _ in range(3))
+#         self.map_64 = nn.ModuleList(ToStyle(64, 512, 64) for _ in range(3))
+#         self.map_32 = nn.ModuleList(ToStyle(64, 512, 32) for _ in range(3))
+#         self.map_16 = nn.ModuleList(
+#             ToStyle(64, 512, 16)
+#             for _ in range(int(math.log(resolution, 2)) * 2 - 2 - 15)
+#         )
+
+#         self.lateral_512 = nn.Conv2d(64, 64, kernel_size=1, stride=1, padding=0)
+#         self.lateral_256 = nn.Conv2d(64, 64, kernel_size=1, stride=1, padding=0)
+#         self.lateral_128 = nn.Conv2d(64, 64, kernel_size=1, stride=1, padding=0)
+#         self.lateral_64 = nn.Conv2d(64, 64, kernel_size=1, stride=1, padding=0)
+#         self.lateral_32 = nn.Conv2d(64, 64, kernel_size=1, stride=1, padding=0)
+#         self.lateral_16 = nn.Conv2d(64, 64, kernel_size=1, stride=1, padding=0)
+
+#     def upsample_add(self, x: Tensor, y: Tensor) -> Tensor:
+#         _, _, H, W = y.size()
+#         return F.interpolate(x, size=(H, W), mode="bilinear", align_corners=True) + y
+
+#     def forward(self, x: Tensor) -> Tensor:
+#         x = self.input_layer(x)
+
+#         out_512 = self.block_512(x)
+#         out_256 = self.block_256(out_512)
+#         out_128 = self.block_128(out_256)
+#         out_64 = self.block_64(out_128)
+#         out_32 = self.block_32(out_64)
+#         out_16 = self.block_16(out_32)
+#         combined_32 = self.upsample_add(out_16, self.lateral_32(out_32))
+#         combined_64 = self.upsample_add(combined_32, self.lateral_64(out_64))
+#         combined_128 = self.upsample_add(combined_64, self.lateral_128(out_128))
+#         combined_256 = self.upsample_add(combined_128, self.lateral_256(out_256))
+#         combined_512 = self.upsample_add(combined_256, self.lateral_512(out_512))
+
+#         latents = []
+#         latents.extend(layer(out_16) for layer in self.map_16)
+#         latents.extend(layer(combined_32) for layer in self.map_32)
+#         latents.extend(layer(combined_64) for layer in self.map_64)
+#         latents.extend(layer(combined_128) for layer in self.map_128)
+#         latents.extend(layer(combined_256) for layer in self.map_256)
+#         latents.extend(layer(combined_512) for layer in self.map_512)
+
+#         return torch.stack(latents, dim=1)

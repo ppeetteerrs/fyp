@@ -1,11 +1,12 @@
 from typing import Optional, Tuple
 
 import torch
+from stylegan.discriminator.discriminator import Discriminator
 from stylegan.generator.generator import Generator
 from torch import Tensor, nn
 from utils.config import config
 
-from psp.encoder import Encoder
+from psp.encoder import Encoder, EncoderV2
 
 
 class pSp(nn.Module):
@@ -14,12 +15,17 @@ class pSp(nn.Module):
 
         # self.opts.n_styles = int(math.log(self.opts.output_size, 2)) * 2 - 2
         # Define architecture
-        self.encoder = Encoder(resolution=config.RESOLUTION).to("cuda")
+        if config.PSP_ENCODER == "v1":
+            self.encoder = Encoder(resolution=config.RESOLUTION).to("cuda")
+        else:
+            self.encoder = EncoderV2(resolution=config.RESOLUTION).to("cuda")
         self.decoder = Generator.from_config(config).to("cuda")
+        self.discriminator = Discriminator.from_config(config).to("cuda")
         # Load model checkpoints
         ckpt = torch.load(str(config.PSP_CKPT))
         if config.PSP_CKPT_TYPE == "stylegan":
             self.decoder.load_state_dict(ckpt["g_ema"], strict=True)
+            self.discriminator.load_state_dict(ckpt["d"], strict=True)
         else:
             self.encoder.load_state_dict(ckpt["encoder"], strict=True)
             self.decoder.load_state_dict(ckpt["decoder"], strict=True)

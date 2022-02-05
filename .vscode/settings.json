@@ -1,5 +1,6 @@
 {
 	"python.analysis.diagnosticSeverityOverrides": {
 		"reportPrivateImportUsage": "none"
-	}
+	},
+	"python.sortImports.path": "/media/ntu/volume1/home/s121md303_02/mambaforge/envs/fyp/bin/isort",
 }
