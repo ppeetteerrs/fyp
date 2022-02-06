@@ -132,7 +132,6 @@ wandb/
 *.lmdb/
 *.pkl
 
-chexpert*
 results
 checkpoint
 animation
