@@ -1,10 +1,9 @@
+import shutil as sh
 from argparse import ArgumentParser
-from dataclasses import dataclass, field
 from distutils.util import strtobool
-from optparse import Option
 from os import environ as ENV
 from pathlib import Path
-from typing import Callable, Dict, List, Literal, Optional, TypeVar, Union, cast
+from typing import Callable, Dict, List, TypeVar, cast
 
 from dotenv import load_dotenv
 
@@ -56,10 +55,9 @@ class CONFIG:
     COVID_19_TEST_LMDB = DATA_DIR / ENV["COVID_19_TEST_LMDB"]
 
     # Output
-    STYLEGAN_OUTPUT_DIR = (
-        Path(ENV["PROJECT_DIR"]) / "output" / EXPERIMENT_NAME / "stylegan"
-    )
-    PSP_OUTPUT_DIR = Path(ENV["PROJECT_DIR"]) / "output" / EXPERIMENT_NAME / "psp"
+    OUTPUT_DIR = Path(Path(ENV["PROJECT_DIR"]) / "output" / EXPERIMENT_NAME)
+    STYLEGAN_OUTPUT_DIR = OUTPUT_DIR / "stylegan"
+    PSP_OUTPUT_DIR = OUTPUT_DIR / "psp"
 
     # StyleGAN Model
     LATENT_DIM = 512
@@ -125,3 +123,5 @@ class CONFIG:
 (CONFIG.PSP_OUTPUT_DIR / "logs").mkdir(parents=True, exist_ok=True)
 (CONFIG.PSP_OUTPUT_DIR / "sample").mkdir(parents=True, exist_ok=True)
 (CONFIG.PSP_OUTPUT_DIR / "checkpoint").mkdir(parents=True, exist_ok=True)
+
+sh.copyfile(env_file_path, str(CONFIG.OUTPUT_DIR / ".env"))
