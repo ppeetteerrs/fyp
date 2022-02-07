@@ -13,10 +13,11 @@ from torchvision import transforms, utils
 from tqdm import tqdm
 
 from stylegan.dataset import MultiResolutionDataset
-from stylegan.discriminator.discriminator import Discriminator
+from stylegan2_torch.discriminator import Discriminator
 from stylegan.distributed import reduce_loss_dict, reduce_sum
-from stylegan.generator.generator import Generator
-from stylegan.utils import (
+from stylegan2_torch.generator import Generator
+from stylegan2_torch import Resolution, default_channels
+from stylegan2_torch.utils import (
     accumulate,
     d_logistic_loss,
     d_r1_loss,
@@ -27,6 +28,7 @@ from stylegan.utils import (
 from utils.config import CONFIG
 from utils.img import transform
 from utils.utils import repeat
+from utils.lmdb import LMDBImageDataset, chexpert_indexer
 
 
 def train(
@@ -61,26 +63,22 @@ def train(
     g_module = generator.module
     d_module = discriminator.module
 
-    sample_z = (
-        sample_z
-        if sample_z is not None
-        else torch.randn(CONFIG.STYLEGAN_SAMPLES, CONFIG.LATENT_DIM, device="cuda")
-    )
+    sample_z = (sample_z if sample_z is not None else torch.randn(
+        CONFIG.STYLEGAN_SAMPLES, CONFIG.LATENT_DIM, device="cuda"))
 
     for idx in pbar:
 
         # Sample real image
-        real_img = next(loader).to("cuda")
+        real_img = next(loader)[0].to("cuda")
 
         # Only trains discriminator
         generator.requires_grad_(False)
         discriminator.requires_grad_(True)
 
         # Get noise style(s)
-        noise = mixing_noise(
-            CONFIG.STYLEGAN_BATCH, CONFIG.LATENT_DIM, CONFIG.STYLEGAN_MIXING, "cuda"
-        )
-        fake_img, _ = generator(noise)
+        noise = mixing_noise(CONFIG.STYLEGAN_BATCH, CONFIG.LATENT_DIM,
+                             CONFIG.STYLEGAN_MIXING, "cuda")
+        fake_img = generator(noise)
 
         # Train discriminator
         fake_pred = discriminator(fake_img)
@@ -103,10 +101,8 @@ def train(
             r1_loss = d_r1_loss(real_pred, real_img)
 
             discriminator.zero_grad()
-            (
-                CONFIG.STYLEGAN_R1 / 2 * r1_loss * CONFIG.STYLEGAN_D_REG_INTERVAL
-                + 0 * real_pred[0]
-            ).backward()
+            (CONFIG.STYLEGAN_R1 / 2 * r1_loss * CONFIG.STYLEGAN_D_REG_INTERVAL
+             + 0 * real_pred[0]).backward()
 
             d_optim.step()
 
@@ -117,10 +113,9 @@ def train(
         discriminator.requires_grad_(False)
 
         # Get noise style(s)
-        noise = mixing_noise(
-            CONFIG.STYLEGAN_BATCH, CONFIG.LATENT_DIM, CONFIG.STYLEGAN_MIXING, "cuda"
-        )
-        fake_img, _ = generator(noise)
+        noise = mixing_noise(CONFIG.STYLEGAN_BATCH, CONFIG.LATENT_DIM,
+                             CONFIG.STYLEGAN_MIXING, "cuda")
+        fake_img = generator(noise)
 
         # Train generator
         fake_pred = discriminator(fake_img)
@@ -135,21 +130,17 @@ def train(
         # Regularize generator
         if idx % CONFIG.STYLEGAN_G_REG_INTERVAL == 0:
             path_batch_size = max(
-                1, CONFIG.STYLEGAN_BATCH // CONFIG.STYLEGAN_PATH_BATCH_SHRINK
-            )
-            noise = mixing_noise(
-                path_batch_size, CONFIG.LATENT_DIM, CONFIG.STYLEGAN_MIXING, "cuda"
-            )
-            fake_img, latents = generator(noise)
+                1, CONFIG.STYLEGAN_BATCH // CONFIG.STYLEGAN_PATH_BATCH_SHRINK)
+            noise = mixing_noise(path_batch_size, CONFIG.LATENT_DIM,
+                                 CONFIG.STYLEGAN_MIXING, "cuda")
+            fake_img, latents = generator(noise, return_latents=True)
 
             path_loss, mean_path_length, path_lengths = g_path_regularize(
-                fake_img, latents, mean_path_length
-            )
+                fake_img, latents, mean_path_length)
 
             generator.zero_grad()
-            weighted_path_loss = (
-                CONFIG.STYLEGAN_PATH_REG * CONFIG.STYLEGAN_G_REG_INTERVAL * path_loss
-            )
+            weighted_path_loss = (CONFIG.STYLEGAN_PATH_REG *
+                                  CONFIG.STYLEGAN_G_REG_INTERVAL * path_loss)
 
             if CONFIG.STYLEGAN_PATH_BATCH_SHRINK:
                 weighted_path_loss += 0 * fake_img[0, 0, 0, 0]
@@ -158,9 +149,8 @@ def train(
 
             g_optim.step()
 
-            mean_path_length_avg = (
-                reduce_sum(mean_path_length).item() / distributed.get_world_size()
-            )
+            mean_path_length_avg = (reduce_sum(mean_path_length).item() /
+                                    distributed.get_world_size())
 
         loss_dict["path"] = path_loss
         loss_dict["path_length"] = path_lengths.mean()
@@ -172,23 +162,20 @@ def train(
         if distributed.get_rank() == 0:
             pbar: tqdm
             pbar.set_description(
-                (
-                    f"d: {loss_reduced['d'].mean().item():.4f}; "
-                    f"g: {loss_reduced['g'].mean().item():.4f}; "
-                    f"r1: {loss_reduced['r1'].mean().item():.4f}; "
-                    f"path: {loss_reduced['path'].mean().item():.4f}; "
-                    f"mean path: {mean_path_length_avg:.4f}; "
-                )
-            )
+                (f"d: {loss_reduced['d'].mean().item():.4f}; "
+                 f"g: {loss_reduced['g'].mean().item():.4f}; "
+                 f"r1: {loss_reduced['r1'].mean().item():.4f}; "
+                 f"path: {loss_reduced['path'].mean().item():.4f}; "
+                 f"mean path: {mean_path_length_avg:.4f}; "))
 
             if idx % 100 == 0:
                 with torch.no_grad():
                     g_ema.eval()
-                    sample, _ = g_ema([sample_z])
+                    sample = g_ema([sample_z])
                     utils.save_image(
                         sample,
-                        f"results/sample/{str(idx).zfill(6)}.png",
-                        nrow=int(CONFIG.STYLEGAN_SAMPLES ** 0.5),
+                        f"{CONFIG.STYLEGAN_OUTPUT_DIR}/sample/{str(idx).zfill(6)}.png",
+                        nrow=int(CONFIG.STYLEGAN_SAMPLES**0.5),
                         normalize=True,
                         value_range=(-1, 1),
                     )
@@ -201,16 +188,16 @@ def train(
                         "g_ema": g_ema.state_dict(),
                         "g_optim": g_optim.state_dict(),
                         "d_optim": d_optim.state_dict(),
-                        "config": config,
+                        "config": CONFIG,
                         "sample_z": sample_z,
                     },
-                    f"results/checkpoint/{str(idx).zfill(6)}.pt",
+                    f"{CONFIG.STYLEGAN_OUTPUT_DIR}/checkpoint/{str(idx).zfill(6)}.pt",
                 )
 
 
 if __name__ == "__main__":
     # torch.backends.cudnn.benchmark = True
-    torch.use_deterministic_algorithms(True)
+    # torch.use_deterministic_algorithms(True)
 
     # Setup distributed processes
     init_process_group(backend="nccl", init_method="env://")
@@ -220,27 +207,29 @@ if __name__ == "__main__":
     distributed.barrier()
 
     # Create models
-    generator = Generator.from_config(CONFIG).to("cuda")
-    discriminator = Discriminator.from_config(CONFIG).to("cuda")
-    g_ema = Generator.from_config(CONFIG).to("cuda")
+    generator = Generator(CONFIG.RESOLUTION).to("cuda")
+    discriminator = Discriminator(CONFIG.RESOLUTION).to("cuda")
+    g_ema = Generator(CONFIG.RESOLUTION).to("cuda")
     g_ema.eval()
 
     # Initialize ema model
     accumulate(g_ema, generator, 0)
 
     # Setup optimizers
-    g_reg_ratio = CONFIG.STYLEGAN_G_REG_INTERVAL / (CONFIG.STYLEGAN_G_REG_INTERVAL + 1)
-    d_reg_ratio = CONFIG.STYLEGAN_D_REG_INTERVAL / (CONFIG.STYLEGAN_D_REG_INTERVAL + 1)
+    g_reg_ratio = CONFIG.STYLEGAN_G_REG_INTERVAL / (
+        CONFIG.STYLEGAN_G_REG_INTERVAL + 1)
+    d_reg_ratio = CONFIG.STYLEGAN_D_REG_INTERVAL / (
+        CONFIG.STYLEGAN_D_REG_INTERVAL + 1)
 
     g_optim = optim.Adam(
         generator.parameters(),
         lr=CONFIG.STYLEGAN_LR * g_reg_ratio,
-        betas=(0, 0.99 ** g_reg_ratio),
+        betas=(0, 0.99**g_reg_ratio),
     )
     d_optim = optim.Adam(
         discriminator.parameters(),
         lr=CONFIG.STYLEGAN_LR * d_reg_ratio,
-        betas=(0, 0.99 ** d_reg_ratio),
+        betas=(0, 0.99**d_reg_ratio),
     )
 
     # Load checkpoint
@@ -279,9 +268,10 @@ if __name__ == "__main__":
 
     # Setup Dataloader
 
-    dataset = MultiResolutionDataset(
-        str(CONFIG.CHEXPERT_TRAIN_LMDB), transform, CONFIG.RESOLUTION
-    )
+    # dataset = MultiResolutionDataset(str(CONFIG.CHEXPERT_TRAIN_LMDB),
+    #                                  transform, CONFIG.RESOLUTION)
+    dataset = LMDBImageDataset(CONFIG.CHEXPERT_TRAIN_LMDB, chexpert_indexer,
+                               transform)
     sampler = DistributedSampler(dataset, shuffle=True)
     loader = DataLoader(
         dataset,
