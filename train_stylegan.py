@@ -1,22 +1,15 @@
+from utils.config import CONFIG, guard
+
+guard()
+
+
 import os
 from typing import Generator as GeneratorType
-from typing import Optional
+from typing import Optional, cast
 
 import torch
-from torch import distributed, optim
-from torch.distributed import init_process_group
-from torch.functional import Tensor
-from torch.nn.parallel import DistributedDataParallel
-from torch.optim.optimizer import Optimizer
-from torch.utils.data import DataLoader, DistributedSampler
-from torchvision import transforms, utils
-from tqdm import tqdm
-
-from stylegan.dataset import MultiResolutionDataset
 from stylegan2_torch.discriminator import Discriminator
-from stylegan.distributed import reduce_loss_dict, reduce_sum
 from stylegan2_torch.generator import Generator
-from stylegan2_torch import Resolution, default_channels
 from stylegan2_torch.utils import (
     accumulate,
     d_logistic_loss,
@@ -25,10 +18,21 @@ from stylegan2_torch.utils import (
     g_path_regularize,
     mixing_noise,
 )
-from utils.config import CONFIG
+from torch import distributed, optim
+from torch.backends import cudnn
+from torch.distributed import init_process_group
+from torch.functional import Tensor
+from torch.nn.parallel import DistributedDataParallel
+from torch.optim.optimizer import Optimizer
+from torch.utils.data import DataLoader, DistributedSampler
+from torch.utils.tensorboard import SummaryWriter
+from torchvision import utils
+from tqdm import tqdm
+
+from utils.distributed import reduce_loss_dict, reduce_sum
 from utils.img import transform
-from utils.utils import repeat
 from utils.lmdb import LMDBImageDataset, chexpert_indexer
+from utils.utils import repeat
 
 
 def train(
@@ -41,16 +45,19 @@ def train(
     sample_z: Optional[Tensor],
     start_iter: int,
 ):
-    pbar = range(start_iter, CONFIG.STYLEGAN_ITER)
 
     if distributed.get_rank() == 0:
         pbar = tqdm(
-            pbar,
+            range(start_iter, CONFIG.STYLEGAN_ITER),
             initial=start_iter,
             total=CONFIG.STYLEGAN_ITER,
             dynamic_ncols=True,
             smoothing=0.01,
         )
+    else:
+        pbar = range(start_iter, CONFIG.STYLEGAN_ITER)
+
+    logger = SummaryWriter(log_dir=str(CONFIG.OUTPUT_DIR / "logs"))
 
     # Initialize tensors
     r1_loss = torch.tensor(0.0, device="cuda")
@@ -60,11 +67,14 @@ def train(
     mean_path_length_avg = 0
     loss_dict = {}
 
-    g_module = generator.module
-    d_module = discriminator.module
+    g_module = cast(Generator, generator.module)
+    d_module = cast(Discriminator, discriminator.module)
 
-    sample_z = (sample_z if sample_z is not None else torch.randn(
-        CONFIG.STYLEGAN_SAMPLES, CONFIG.LATENT_DIM, device="cuda"))
+    sample_z = (
+        sample_z
+        if sample_z is not None
+        else torch.randn(CONFIG.STYLEGAN_SAMPLES, CONFIG.LATENT_DIM, device="cuda")
+    )
 
     for idx in pbar:
 
@@ -76,8 +86,9 @@ def train(
         discriminator.requires_grad_(True)
 
         # Get noise style(s)
-        noise = mixing_noise(CONFIG.STYLEGAN_BATCH, CONFIG.LATENT_DIM,
-                             CONFIG.STYLEGAN_MIXING, "cuda")
+        noise = mixing_noise(
+            CONFIG.STYLEGAN_BATCH, CONFIG.LATENT_DIM, CONFIG.STYLEGAN_MIXING, "cuda"
+        )
         fake_img = generator(noise)
 
         # Train discriminator
@@ -101,8 +112,10 @@ def train(
             r1_loss = d_r1_loss(real_pred, real_img)
 
             discriminator.zero_grad()
-            (CONFIG.STYLEGAN_R1 / 2 * r1_loss * CONFIG.STYLEGAN_D_REG_INTERVAL
-             + 0 * real_pred[0]).backward()
+            (
+                CONFIG.STYLEGAN_R1 / 2 * r1_loss * CONFIG.STYLEGAN_D_REG_INTERVAL
+                + 0 * real_pred[0]
+            ).backward()
 
             d_optim.step()
 
@@ -113,8 +126,9 @@ def train(
         discriminator.requires_grad_(False)
 
         # Get noise style(s)
-        noise = mixing_noise(CONFIG.STYLEGAN_BATCH, CONFIG.LATENT_DIM,
-                             CONFIG.STYLEGAN_MIXING, "cuda")
+        noise = mixing_noise(
+            CONFIG.STYLEGAN_BATCH, CONFIG.LATENT_DIM, CONFIG.STYLEGAN_MIXING, "cuda"
+        )
         fake_img = generator(noise)
 
         # Train generator
@@ -130,17 +144,21 @@ def train(
         # Regularize generator
         if idx % CONFIG.STYLEGAN_G_REG_INTERVAL == 0:
             path_batch_size = max(
-                1, CONFIG.STYLEGAN_BATCH // CONFIG.STYLEGAN_PATH_BATCH_SHRINK)
-            noise = mixing_noise(path_batch_size, CONFIG.LATENT_DIM,
-                                 CONFIG.STYLEGAN_MIXING, "cuda")
+                1, CONFIG.STYLEGAN_BATCH // CONFIG.STYLEGAN_PATH_BATCH_SHRINK
+            )
+            noise = mixing_noise(
+                path_batch_size, CONFIG.LATENT_DIM, CONFIG.STYLEGAN_MIXING, "cuda"
+            )
             fake_img, latents = generator(noise, return_latents=True)
 
             path_loss, mean_path_length, path_lengths = g_path_regularize(
-                fake_img, latents, mean_path_length)
+                fake_img, latents, mean_path_length
+            )
 
             generator.zero_grad()
-            weighted_path_loss = (CONFIG.STYLEGAN_PATH_REG *
-                                  CONFIG.STYLEGAN_G_REG_INTERVAL * path_loss)
+            weighted_path_loss = (
+                CONFIG.STYLEGAN_PATH_REG * CONFIG.STYLEGAN_G_REG_INTERVAL * path_loss
+            )
 
             if CONFIG.STYLEGAN_PATH_BATCH_SHRINK:
                 weighted_path_loss += 0 * fake_img[0, 0, 0, 0]
@@ -149,8 +167,9 @@ def train(
 
             g_optim.step()
 
-            mean_path_length_avg = (reduce_sum(mean_path_length).item() /
-                                    distributed.get_world_size())
+            mean_path_length_avg = (
+                reduce_sum(mean_path_length).item() / distributed.get_world_size()
+            )
 
         loss_dict["path"] = path_loss
         loss_dict["path_length"] = path_lengths.mean()
@@ -159,14 +178,22 @@ def train(
 
         loss_reduced = reduce_loss_dict(loss_dict)
 
-        if distributed.get_rank() == 0:
-            pbar: tqdm
-            pbar.set_description(
-                (f"d: {loss_reduced['d'].mean().item():.4f}; "
-                 f"g: {loss_reduced['g'].mean().item():.4f}; "
-                 f"r1: {loss_reduced['r1'].mean().item():.4f}; "
-                 f"path: {loss_reduced['path'].mean().item():.4f}; "
-                 f"mean path: {mean_path_length_avg:.4f}; "))
+        if isinstance(pbar, tqdm):
+            # pbar.set_description(
+            #     (
+            #         f"d: {loss_reduced['d'].mean().item():.4f}; "
+            #         f"g: {loss_reduced['g'].mean().item():.4f}; "
+            #         f"r1: {loss_reduced['r1'].mean().item():.4f}; "
+            #         f"path: {loss_reduced['path'].mean().item():.4f}; "
+            #         f"mean path: {mean_path_length_avg:.4f}; "
+            #     )
+            # )
+
+            logger.add_scalar(f"train/d", loss_reduced["d"].mean().item(), idx)
+            logger.add_scalar(f"train/g", loss_reduced["g"].mean().item(), idx)
+            logger.add_scalar(f"train/r1", loss_reduced["r1"].mean().item(), idx)
+            logger.add_scalar(f"train/path", loss_reduced["path"].mean().item(), idx)
+            logger.add_scalar(f"train/mean_path", mean_path_length_avg, idx)
 
             if idx % 100 == 0:
                 with torch.no_grad():
@@ -174,7 +201,7 @@ def train(
                     sample = g_ema([sample_z])
                     utils.save_image(
                         sample,
-                        f"{CONFIG.STYLEGAN_OUTPUT_DIR}/sample/{str(idx).zfill(6)}.png",
+                        f"{CONFIG.OUTPUT_DIR}/sample/{str(idx).zfill(6)}.png",
                         nrow=int(CONFIG.STYLEGAN_SAMPLES**0.5),
                         normalize=True,
                         value_range=(-1, 1),
@@ -191,13 +218,12 @@ def train(
                         "config": CONFIG,
                         "sample_z": sample_z,
                     },
-                    f"{CONFIG.STYLEGAN_OUTPUT_DIR}/checkpoint/{str(idx).zfill(6)}.pt",
+                    f"{CONFIG.OUTPUT_DIR}/checkpoint/{str(idx).zfill(6)}.pt",
                 )
 
 
 if __name__ == "__main__":
-    # torch.backends.cudnn.benchmark = True
-    # torch.use_deterministic_algorithms(True)
+    cudnn.benchmark = True
 
     # Setup distributed processes
     init_process_group(backend="nccl", init_method="env://")
@@ -216,10 +242,8 @@ if __name__ == "__main__":
     accumulate(g_ema, generator, 0)
 
     # Setup optimizers
-    g_reg_ratio = CONFIG.STYLEGAN_G_REG_INTERVAL / (
-        CONFIG.STYLEGAN_G_REG_INTERVAL + 1)
-    d_reg_ratio = CONFIG.STYLEGAN_D_REG_INTERVAL / (
-        CONFIG.STYLEGAN_D_REG_INTERVAL + 1)
+    g_reg_ratio = CONFIG.STYLEGAN_G_REG_INTERVAL / (CONFIG.STYLEGAN_G_REG_INTERVAL + 1)
+    d_reg_ratio = CONFIG.STYLEGAN_D_REG_INTERVAL / (CONFIG.STYLEGAN_D_REG_INTERVAL + 1)
 
     g_optim = optim.Adam(
         generator.parameters(),
@@ -236,8 +260,6 @@ if __name__ == "__main__":
     sample_z = None
     start_iter = 0
     if CONFIG.STYLEGAN_CKPT is not None:
-        print("Loading model:", CONFIG.STYLEGAN_CKPT)
-
         ckpt = torch.load(CONFIG.STYLEGAN_CKPT)
 
         ckpt_name = os.path.basename(CONFIG.STYLEGAN_CKPT)
@@ -267,11 +289,7 @@ if __name__ == "__main__":
     )
 
     # Setup Dataloader
-
-    # dataset = MultiResolutionDataset(str(CONFIG.CHEXPERT_TRAIN_LMDB),
-    #                                  transform, CONFIG.RESOLUTION)
-    dataset = LMDBImageDataset(CONFIG.CHEXPERT_TRAIN_LMDB, chexpert_indexer,
-                               transform)
+    dataset = LMDBImageDataset(CONFIG.CHEXPERT_TRAIN_LMDB, chexpert_indexer, transform)
     sampler = DistributedSampler(dataset, shuffle=True)
     loader = DataLoader(
         dataset,

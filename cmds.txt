@@ -1,6 +1,0 @@
-torchrun --nproc_per_node 4 train.py chexpert_lmdb
-
-
-https://iamazing.cn/page/pixel2style2pixe
-
-Need to update devcontainer.json

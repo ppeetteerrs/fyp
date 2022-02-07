@@ -132,12 +132,6 @@ wandb/
 *.lmdb/
 *.pkl
 
-results
-checkpoint
-animation
-generated
 backup
+input
 output
-pretrained
-*.env
-.vscode

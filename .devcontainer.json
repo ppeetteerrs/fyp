@@ -8,15 +8,24 @@
 		"--ulimit",
 		"memlock=-1",
 		"--ulimit",
-		"stack=67108864"
+		"stack=67108864",
+		"--name",
+		"fyp"
 	],
+	"workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind,consistency=cached",
+	"workspaceFolder": "/workspace",
 	"extensions": [
 		"ms-python.vscode-pylance",
 		"ms-python.python",
 		"ms-vscode.cpptools",
 		"ms-vscode.cpptools-extension-pack",
 		"nvidia.nsight-vscode-edition",
-		"trungngo.autoflake"
+		"trungngo.autoflake",
+		"kevinkyang.auto-comment-blocks",
+		"ms-toolsai.jupyter",
+		"yzhang.markdown-all-in-one",
+		"christian-kohler.path-intellisense",
+		"njpwerner.autodocstring",
 	],
 	"settings": {
 		"C_Cpp.default.includePath": [
@@ -28,6 +37,19 @@
 		"python.analysis.typeCheckingMode": "basic",
 		"python.analysis.diagnosticSeverityOverrides": {
 			"reportPrivateImportUsage": "none"
-		}
+		},
+		"python.sortImports.path": "/home/user/.conda/envs/user/bin/isort",
+		"python.autoComplete.extraPaths": [
+			"${workspaceFolder}/**/*",
+			"/home/user/.conda/envs/user/pkgs/libopencv-4.5.2-py38hcdf9bf1_0/lib/*"
+		],
+		"python.analysis.extraPaths": [
+			"${workspaceFolder}/**/*",
+			"/home/user/.conda/envs/user/pkgs/libopencv-4.5.2-py38hcdf9bf1_0/lib/*"
+		],
+		"python.linting.flake8Args": [
+			"--ignore=E402",
+			"--max-line-length=120"
+		]
 	},
 }

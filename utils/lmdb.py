@@ -1,17 +1,6 @@
-import os
 from io import BytesIO
 from pathlib import Path
-from typing import (
-    Any,
-    Callable,
-    Collection,
-    Generic,
-    List,
-    Optional,
-    Tuple,
-    TypeVar,
-    Union,
-)
+from typing import Any, Callable, Collection, Generic, Optional, Tuple, TypeVar
 
 import cv2 as cv
 import numpy as np
@@ -58,7 +47,7 @@ class LMDBWriter(Generic[T]):
             readonly=False,
             readahead=False,
             meminit=False,
-            map_size=1024 ** 4,
+            map_size=1024**4,
         )
 
     def set(self, key: str, value: bytes):

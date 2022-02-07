@@ -14,9 +14,13 @@ parser = ArgumentParser()
 parser.add_argument(
     "--env", type=str, default=".env", help="Environment (settings) file"
 )
-env_file_path = parser.parse_args().env
-print(f"Using environment file: {env_file_path}")
-load_dotenv(env_file_path)
+
+project_dir = Path(ENV.get("PROJECT_DIR", ""))
+env_file: Path = (project_dir / parser.parse_args().env).resolve()
+print(f"Using environment file: {env_file}")
+
+load_dotenv(project_dir / ".env")
+load_dotenv(env_file)
 
 T = TypeVar("T")
 
@@ -31,33 +35,32 @@ def env_get(
 
 
 def env_or(key: str, default: str, alt: str) -> str:
-    return alt if ENV[key].lower() == alt else default
+    return alt if ENV.get(key, "").lower() == alt else default
 
 
 def to_bool(key: str) -> bool:
-    return bool(ENV[key] != "" and strtobool(ENV[key]))
+    return bool(strtobool(ENV.get(key, "f")))
 
 
 class CONFIG:
     EXPERIMENT_NAME = env_get("EXPERIMENT_NAME", "default")
 
     # Project
-    PROJECT_DIR = Path(ENV["PROJECT_DIR"])
-    RESOLUTION: Resolution = cast(Resolution, int(ENV["RESOLUTION"]))
+    PROJECT_DIR = Path(ENV.get("PROJECT_DIR", ""))
+    RESOLUTION: Resolution = cast(Resolution, int(ENV.get("RESOLUTION", "")))
 
     # Dataset
-    DATA_DIR = Path(ENV["DATA_DIR"])
-    CHEXPERT_DIR = DATA_DIR / ENV["CHEXPERT_DIR"]
-    COVID_19_DIR = DATA_DIR / ENV["COVID_19_DIR"]
-    CHEXPERT_TRAIN_LMDB = DATA_DIR / ENV["CHEXPERT_TRAIN_LMDB"]
-    CHEXPERT_TEST_LMDB = DATA_DIR / ENV["CHEXPERT_TEST_LMDB"]
-    COVID_19_TRAIN_LMDB = DATA_DIR / ENV["COVID_19_TRAIN_LMDB"]
-    COVID_19_TEST_LMDB = DATA_DIR / ENV["COVID_19_TEST_LMDB"]
+    CHEXPERT_DIR = ENV.get("CHEXPERT_DIR", "")
+    COVID_19_DIR = ENV.get("COVID_19_DIR", "")
+
+    DATA_DIR = PROJECT_DIR / "input/data"
+    CHEXPERT_TRAIN_LMDB = DATA_DIR / "chexpert_train"
+    CHEXPERT_TEST_LMDB = DATA_DIR / "chexpert_test"
+    COVID_19_TRAIN_LMDB = DATA_DIR / "covid_train"
+    COVID_19_TEST_LMDB = DATA_DIR / "covid_test"
 
     # Output
-    OUTPUT_DIR = Path(Path(ENV["PROJECT_DIR"]) / "output" / EXPERIMENT_NAME)
-    STYLEGAN_OUTPUT_DIR = OUTPUT_DIR / "stylegan"
-    PSP_OUTPUT_DIR = OUTPUT_DIR / "psp"
+    OUTPUT_DIR = Path(PROJECT_DIR / "output" / EXPERIMENT_NAME)
 
     # StyleGAN Model
     LATENT_DIM = 512
@@ -78,50 +81,52 @@ class CONFIG:
     }
 
     # StyleGAN Training
-    STYLEGAN_ITER = int(ENV["STYLEGAN_ITER"])
-    STYLEGAN_BATCH = int(ENV["STYLEGAN_BATCH"])
-    STYLEGAN_SAMPLES = int(ENV["STYLEGAN_SAMPLES"])
-    STYLEGAN_LR = float(ENV["STYLEGAN_LR"])
-    STYLEGAN_MIXING = float(ENV["STYLEGAN_MIXING"])
+    STYLEGAN_ITER = int(ENV.get("STYLEGAN_ITER", ""))
+    STYLEGAN_BATCH = int(ENV.get("STYLEGAN_BATCH", ""))
+    STYLEGAN_SAMPLES = int(ENV.get("STYLEGAN_SAMPLES", ""))
+    STYLEGAN_LR = float(ENV.get("STYLEGAN_LR", ""))
+    STYLEGAN_MIXING = float(ENV.get("STYLEGAN_MIXING", ""))
     STYLEGAN_CKPT = env_get("STYLEGAN_CKPT", None)
 
     # StyleGAN Regularization
-    STYLEGAN_R1 = float(ENV["STYLEGAN_R1"])
-    STYLEGAN_PATH_REG = float(ENV["STYLEGAN_PATH_REG"])
-    STYLEGAN_PATH_BATCH_SHRINK = int(ENV["STYLEGAN_PATH_BATCH_SHRINK"])
-    STYLEGAN_D_REG_INTERVAL = float(ENV["STYLEGAN_D_REG_INTERVAL"])
-    STYLEGAN_G_REG_INTERVAL = float(ENV["STYLEGAN_G_REG_INTERVAL"])
+    STYLEGAN_R1 = float(ENV.get("STYLEGAN_R1", ""))
+    STYLEGAN_PATH_REG = float(ENV.get("STYLEGAN_PATH_REG", ""))
+    STYLEGAN_PATH_BATCH_SHRINK = int(ENV.get("STYLEGAN_PATH_BATCH_SHRINK", ""))
+    STYLEGAN_D_REG_INTERVAL = float(ENV.get("STYLEGAN_D_REG_INTERVAL", ""))
+    STYLEGAN_G_REG_INTERVAL = float(ENV.get("STYLEGAN_G_REG_INTERVAL", ""))
 
     # pSp Model
     PSP_ENCODER: str = env_or("PSP_ENCODER", "original", "deep")
     PSP_USE_MEAN: bool = to_bool("PSP_USE_MEAN")
 
     # pSp Training
-    PSP_ITER = int(ENV["PSP_ITER"])
-    PSP_BATCH_SIZE = int(ENV["PSP_BATCH_SIZE"])
+    PSP_ITER = int(ENV.get("PSP_ITER", 0))
+    PSP_BATCH_SIZE = int(ENV.get("PSP_BATCH_SIZE", 0))
     PSP_OPTIM: str = env_or("PSP_OPTIM", "ranger", "adam")
-    PSP_LR = float(ENV["PSP_LR"])
-    PSP_CKPT = Path(ENV["PROJECT_DIR"]) / ENV["PSP_CKPT"]
+    PSP_LR = float(ENV.get("PSP_LR", 0))
+    PSP_CKPT = Path(ENV.get("PROJECT_DIR", "")) / ENV.get("PSP_CKPT", "")
 
-    PSP_SAMPLE_INTERVAL = int(ENV["PSP_SAMPLE_INTERVAL"])
-    PSP_TEST_INTERVAL = int(ENV["PSP_TEST_INTERVAL"])
-    PSP_CKPT_INTERVAL = int(ENV["PSP_CKPT_INTERVAL"])
+    PSP_SAMPLE_INTERVAL = int(ENV.get("PSP_SAMPLE_INTERVAL", 0))
+    PSP_TEST_INTERVAL = int(ENV.get("PSP_TEST_INTERVAL", 0))
+    PSP_CKPT_INTERVAL = int(ENV.get("PSP_CKPT_INTERVAL", 0))
 
     # pSp Training
     PSP_USE_LOCALIZER = to_bool("PSP_USE_LOCALIZER")
-    PSP_LOCALIZER_WEIGHT = float(ENV["PSP_LOCALIZER_WEIGHT"])
-    PSP_LOSS_L2 = float(ENV["PSP_LOSS_L2"])
-    PSP_LOSS_ID = float(ENV["PSP_LOSS_ID"])
-    PSP_LOSS_ID_DISCRIMINATOR = float(ENV["PSP_LOSS_ID_DISCRIMINATOR"])
-    PSP_LOSS_LPIPS = float(ENV["PSP_LOSS_LPIPS"])
-    PSP_LOSS_REG = float(ENV["PSP_LOSS_REG"])
-    PSP_LOSS_DISCRIMINATOR = float(ENV["PSP_LOSS_DISCRIMINATOR"])
+    PSP_LOCALIZER_WEIGHT = float(ENV.get("PSP_LOCALIZER_WEIGHT", 0))
+    PSP_LOSS_L2 = float(ENV.get("PSP_LOSS_L2", 0))
+    PSP_LOSS_ID = float(ENV.get("PSP_LOSS_ID", 0))
+    PSP_LOSS_ID_DISCRIMINATOR = float(ENV.get("PSP_LOSS_ID_DISCRIMINATOR", 0))
+    PSP_LOSS_LPIPS = float(ENV.get("PSP_LOSS_LPIPS", 0))
+    PSP_LOSS_REG = float(ENV.get("PSP_LOSS_REG", 0))
+    PSP_LOSS_DISCRIMINATOR = float(ENV.get("PSP_LOSS_DISCRIMINATOR", 0))
 
 
-(CONFIG.STYLEGAN_OUTPUT_DIR / "sample").mkdir(parents=True, exist_ok=True)
-(CONFIG.STYLEGAN_OUTPUT_DIR / "checkpoint").mkdir(parents=True, exist_ok=True)
-(CONFIG.PSP_OUTPUT_DIR / "logs").mkdir(parents=True, exist_ok=True)
-(CONFIG.PSP_OUTPUT_DIR / "sample").mkdir(parents=True, exist_ok=True)
-(CONFIG.PSP_OUTPUT_DIR / "checkpoint").mkdir(parents=True, exist_ok=True)
+(CONFIG.OUTPUT_DIR / "sample").mkdir(parents=True, exist_ok=True)
+(CONFIG.OUTPUT_DIR / "checkpoint").mkdir(parents=True, exist_ok=True)
+(CONFIG.OUTPUT_DIR / "logs").mkdir(parents=True, exist_ok=True)
 
-sh.copyfile(env_file_path, str(CONFIG.OUTPUT_DIR / ".env"))
+sh.copyfile(str(env_file), str(CONFIG.OUTPUT_DIR / f"{CONFIG.EXPERIMENT_NAME}.env"))
+
+
+def guard():
+    pass

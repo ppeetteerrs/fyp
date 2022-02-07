@@ -75,10 +75,10 @@ class Coach:
         )
 
         # Initialize logger
-        self.logger = SummaryWriter(log_dir=str(CONFIG.PSP_OUTPUT_DIR / "logs"))
+        self.logger = SummaryWriter(log_dir=str(CONFIG.OUTPUT_DIR / "logs"))
 
         # Initialize checkpoint dir
-        self.checkpoint_dir = CONFIG.PSP_OUTPUT_DIR / "checkpoint"
+        self.checkpoint_dir = CONFIG.OUTPUT_DIR / "checkpoint"
 
         self.start_iter = 0
         if self.net.resumed:
@@ -114,7 +114,7 @@ class Coach:
             if step % CONFIG.PSP_SAMPLE_INTERVAL == 0:
                 save_image(
                     torch.concat([img_in, img_targ, img_out], dim=2),
-                    str(CONFIG.PSP_OUTPUT_DIR / "sample" / f"{str(step).zfill(6)}.png"),
+                    str(CONFIG.OUTPUT_DIR / "sample" / f"{str(step).zfill(6)}.png"),
                     nrow=CONFIG.PSP_BATCH_SIZE,
                     normalize=True,
                     value_range=(-1, 1),
@@ -135,7 +135,7 @@ class Coach:
                         "optim": self.optimizer.state_dict(),
                         "config": CONFIG,
                     },
-                    CONFIG.PSP_OUTPUT_DIR / f"checkpoint/{str(step).zfill(6)}.pt",
+                    CONFIG.OUTPUT_DIR / f"checkpoint/{str(step).zfill(6)}.pt",
                 )
 
     def test(self, step: int):
@@ -148,7 +148,7 @@ class Coach:
                 _, loss_dict = self.calc_loss(img_in, img_targ, img_out, w_plus)
             loss_dicts.append(loss_dict)
 
-            out_dir = CONFIG.PSP_OUTPUT_DIR / f"test/{step}"
+            out_dir = CONFIG.OUTPUT_DIR / f"test/{step}"
             out_dir.mkdir(parents=True, exist_ok=True)
             save_image(
                 torch.concat([img_in, img_targ, img_out], dim=2),
