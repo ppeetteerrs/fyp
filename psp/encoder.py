@@ -3,7 +3,7 @@ import math
 import numpy as np
 import torch
 import torch.nn.functional as F
-from stylegan.equalized_lr import EqualLinear
+from stylegan2_torch import EqualLinear, Resolution
 from torch import Tensor, nn
 from torch.nn import (
     AdaptiveAvgPool2d,
@@ -15,7 +15,6 @@ from torch.nn import (
     Sequential,
     Sigmoid,
 )
-from utils.utils import Resolution
 
 
 class SEModule(nn.Module):
@@ -54,15 +53,16 @@ class ResnetBlock(nn.Module):
             self.shortcut = MaxPool2d(1, stride)
         else:
             self.shortcut = Sequential(
-                Conv2d(in_channel, out_channel, (1, 1), stride, bias=False),
+                Conv2d(in_channel, out_channel, (1, 1), stride),
                 BatchNorm2d(out_channel),
             )
 
         self.convs = Sequential(
             BatchNorm2d(in_channel),
-            Conv2d(in_channel, out_channel, (3, 3), (1, 1), 1, bias=False),
+            Conv2d(in_channel, out_channel, (3, 3), (1, 1), 1),
             PReLU(out_channel),
-            Conv2d(out_channel, out_channel, (3, 3), stride, 1, bias=False),
+            BatchNorm2d(out_channel),
+            Conv2d(out_channel, out_channel, (3, 3), stride, 1),
             BatchNorm2d(out_channel),
             SEModule(out_channel, 16),
         )
@@ -114,13 +114,11 @@ class ToStyle(nn.Module):
 
 
 class Encoder(nn.Module):
-    def __init__(self, *, resolution: Resolution):
+    def __init__(self, in_channel: int, resolution: Resolution):
         super().__init__()
 
-        self.resize = torch.nn.AdaptiveAvgPool2d((256, 256))
-
         self.input_layer = Sequential(
-            Conv2d(1, 64, (3, 3), 1, 1, bias=False),
+            Conv2d(in_channel, 64, (3, 3), 1, 1, bias=False),
             BatchNorm2d(64),
             PReLU(64),
         )
@@ -146,8 +144,7 @@ class Encoder(nn.Module):
         return F.interpolate(x, size=(H, W), mode="bilinear", align_corners=True) + y
 
     def forward(self, x: Tensor) -> Tensor:
-        x = self.input_layer(self.resize(x))
-
+        x = self.input_layer(x)
         feature_64 = self.block_64(self.block_128(x))
         feature_32 = self.block_32(feature_64)
         feature_16 = self.block_16(feature_32)
@@ -165,11 +162,11 @@ class Encoder(nn.Module):
 
 
 class EncoderDeep(nn.Module):
-    def __init__(self, *, resolution: Resolution):
+    def __init__(self, in_channel: int, resolution: Resolution):
         super().__init__()
 
         self.input_layer = Sequential(
-            Conv2d(1, 32, (3, 3), 1, 1, bias=False),
+            Conv2d(in_channel, 32, (3, 3), 1, 1, bias=False),
             BatchNorm2d(32),
             PReLU(32),
         )

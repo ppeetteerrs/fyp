@@ -8,14 +8,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 import SimpleITK as sitk
 from tqdm import tqdm
-from utils.config import (
-    COVID_19_DIR,
-    COVID_19_TEST_LMDB,
-    COVID_19_TRAIN_LMDB,
-    RESOLUTION,
-)
+from utils.config import CONFIG
 from utils.img import center_crop
-from utils.lmdb import LMDBImageWriter, covid_ct_indexer
+from utils.lmdb import LMDBImageWriter, covid_ct_indexer_lung
 
 
 # Add normalization param, remove blank stacks, use colour channels to pass info
@@ -148,7 +143,7 @@ def process_subject_expand(
 
 def plot_lungs(infos: List[Dict[str, Union[str, List[str]]]]) -> None:
     _, ax = plt.subplots(len(infos), 6, figsize=(3 * 6, 3 * len(infos)))
-    for i, info in tqdm(list(enumerate(infos))):
+    for i, info in tqdm(list(enumerate(infos)), dynamic_ncols=True, smoothing=0.01):
 
         (
             localizer_img,
@@ -175,7 +170,7 @@ def plot_lungs(infos: List[Dict[str, Union[str, List[str]]]]) -> None:
 
 def plot_subjects(infos: List[Dict[str, Union[str, List[str]]]]) -> None:
     _, ax = plt.subplots(len(infos), 4, figsize=(3 * len(infos), 12))
-    for i, info in tqdm(list(enumerate(infos))):
+    for i, info in tqdm(list(enumerate(infos)), dynamic_ncols=True, smoothing=0.01):
         lung_raw, lung_target, med_raw, med_target = process_subject(info)
         ax[i][0].set_title("lung raw")
         ax[i][0].imshow(get_plt_img(lung_raw))
@@ -194,21 +189,23 @@ def img_to_bytes(np_img: np.ndarray):
 
 
 def prog_infos(writer: LMDBImageWriter, infos: List[Dict[str, Union[str, List[str]]]]):
-    for info in tqdm(infos):
-        lung_raw, lung_target, med_raw, med_target = process_subject(
-            info, size=RESOLUTION
-        )
-        writer.set_idx(info["index"], (lung_raw, lung_target, med_raw, med_target))
+    for info in tqdm(infos, dynamic_ncols=True, smoothing=0.01):
+        # lung_raw, lung_target, med_raw, med_target = process_subject(
+        #     info, size=CONFIG.RESOLUTION
+        # )
+        # writer.set_idx(info["index"], (lung_raw, lung_target, med_raw, med_target))
+        lung_raw, lung_target, _, _ = process_subject(info, size=CONFIG.RESOLUTION)
+        writer.set_idx(info["index"], (lung_raw, lung_target))
     writer.set_int("length", len(infos))
 
 
 if __name__ == "__main__":
-    train_writer = LMDBImageWriter(COVID_19_TRAIN_LMDB, covid_ct_indexer)
-    train_infos = pickle.load(open(COVID_19_DIR / "train_infos.pkl", "rb"))
+    train_writer = LMDBImageWriter(CONFIG.COVID_19_TRAIN_LMDB, covid_ct_indexer_lung)
+    train_infos = pickle.load(open(CONFIG.COVID_19_DIR / "train_infos.pkl", "rb"))
     print(f"There are {len(train_infos)} training images.")
     prog_infos(train_writer, train_infos)
 
-    test_writer = LMDBImageWriter(COVID_19_TEST_LMDB, covid_ct_indexer)
-    test_infos = pickle.load(open(COVID_19_DIR / "test_infos.pkl", "rb"))
+    test_writer = LMDBImageWriter(CONFIG.COVID_19_TEST_LMDB, covid_ct_indexer_lung)
+    test_infos = pickle.load(open(CONFIG.COVID_19_DIR / "test_infos.pkl", "rb"))
     print(f"There are {len(test_infos)} testing images.")
     prog_infos(test_writer, test_infos)

@@ -48,7 +48,7 @@
 			"/home/user/.conda/envs/user/pkgs/libopencv-4.5.2-py38hcdf9bf1_0/lib/*"
 		],
 		"python.linting.flake8Args": [
-			"--ignore=E402",
+			"--ignore=E402,E203",
 			"--max-line-length=120"
 		]
 	},

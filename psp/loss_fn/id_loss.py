@@ -115,7 +115,7 @@ class IDLoss(nn.Module):
         super().__init__()
         self.facenet = Backbone()
         self.facenet.load_state_dict(
-            torch.load(CONFIG.PROJECT_DIR / "pretrained/arcface.pt")
+            torch.load(CONFIG.PROJECT_DIR / "input/pretrained/arcface.pt")
         )
         self.face_pool = torch.nn.AdaptiveAvgPool2d((112, 112))
         self.facenet.eval()

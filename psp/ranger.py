@@ -1,4 +1,5 @@
 import math
+from typing import Any
 
 import torch
 from torch.optim.optimizer import Optimizer
@@ -123,6 +124,7 @@ class Ranger(Optimizer):
 
                 buffered = self.radam_buffer[int(state["step"] % 10)]
 
+                step_size: Any
                 if state["step"] == buffered[0]:
                     N_sma, step_size = buffered[1], buffered[2]
                 else:

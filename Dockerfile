@@ -25,6 +25,7 @@ ENV PATH=/opt/conda/bin:/usr/local/cuda/bin:$PATH
 RUN conda init --all && \
 	conda create -n user --clone base
 RUN echo "conda activate user" >>/home/user/.bashrc
+RUN echo 'alias tr="torchrun --nproc_per_node"' >>/home/user/.bashrc
 SHELL ["conda", "run", "-n", "user", "/bin/bash", "-c"]
 
 WORKDIR /workspace
@@ -35,7 +36,7 @@ RUN mamba install -y opencv pycuda nibabel pydicom python-lmdb python-dotenv tqd
 RUN mamba install -c rapidsai -c nvidia cusignal
 RUN mamba install -y -c simpleitk simpleitk
 RUN mamba install -y tensorboard isort
-RUN pip install -U stylegan2_torch deepdrr
 RUN mamba install -y autopep8 black flake8 autoflake
+RUN pip install -U stylegan2_torch deepdrr torch-tb-profiler lpips
 
 CMD "bash"

@@ -24,7 +24,7 @@ def covid_ct_indexer(idx: int) -> Tuple[bytes]:
     return tuple(
         [
             f"{str(idx).zfill(6)}_{img_type}".encode()
-            for img_type in ["lung_raw", "lung_targ", "med_raw", "med_targ"]
+            for img_type in ["raw", "localizer", "deep_drr"]
         ]
     )
 
@@ -33,8 +33,14 @@ def covid_ct_indexer_lung(idx: int) -> Tuple[bytes]:
     return tuple(
         [
             f"{str(idx).zfill(6)}_{img_type}".encode()
-            for img_type in ["lung_raw", "lung_targ"]
+            for img_type in ["raw", "localizer"]
         ]
+    )
+
+
+def covid_ct_indexer_drr(idx: int) -> Tuple[bytes]:
+    return tuple(
+        [f"{str(idx).zfill(6)}_{img_type}".encode() for img_type in ["deep_drr"]]
     )
 
 

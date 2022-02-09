@@ -8,8 +8,7 @@ from typing import Generator as GeneratorType
 from typing import Optional, cast
 
 import torch
-from stylegan2_torch.discriminator import Discriminator
-from stylegan2_torch.generator import Generator
+from stylegan2_torch import Discriminator, Generator
 from stylegan2_torch.utils import (
     accumulate,
     d_logistic_loss,
@@ -179,23 +178,13 @@ def train(
         loss_reduced = reduce_loss_dict(loss_dict)
 
         if isinstance(pbar, tqdm):
-            # pbar.set_description(
-            #     (
-            #         f"d: {loss_reduced['d'].mean().item():.4f}; "
-            #         f"g: {loss_reduced['g'].mean().item():.4f}; "
-            #         f"r1: {loss_reduced['r1'].mean().item():.4f}; "
-            #         f"path: {loss_reduced['path'].mean().item():.4f}; "
-            #         f"mean path: {mean_path_length_avg:.4f}; "
-            #     )
-            # )
-
             logger.add_scalar(f"train/d", loss_reduced["d"].mean().item(), idx)
             logger.add_scalar(f"train/g", loss_reduced["g"].mean().item(), idx)
             logger.add_scalar(f"train/r1", loss_reduced["r1"].mean().item(), idx)
             logger.add_scalar(f"train/path", loss_reduced["path"].mean().item(), idx)
             logger.add_scalar(f"train/mean_path", mean_path_length_avg, idx)
 
-            if idx % 100 == 0:
+            if idx % 1000 == 0:
                 with torch.no_grad():
                     g_ema.eval()
                     sample = g_ema([sample_z])
@@ -207,7 +196,7 @@ def train(
                         value_range=(-1, 1),
                     )
 
-            if idx % 2000 == 0:
+            if idx % 5000 == 0:
                 torch.save(
                     {
                         "g": g_module.state_dict(),
@@ -215,7 +204,6 @@ def train(
                         "g_ema": g_ema.state_dict(),
                         "g_optim": g_optim.state_dict(),
                         "d_optim": d_optim.state_dict(),
-                        "config": CONFIG,
                         "sample_z": sample_z,
                     },
                     f"{CONFIG.OUTPUT_DIR}/checkpoint/{str(idx).zfill(6)}.pt",
