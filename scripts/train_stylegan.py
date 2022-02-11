@@ -27,7 +27,6 @@ from torch.utils.data import DataLoader, DistributedSampler
 from torch.utils.tensorboard import SummaryWriter
 from torchvision import utils
 from tqdm import tqdm
-
 from utils.distributed import reduce_loss_dict, reduce_sum
 from utils.img import transform
 from utils.lmdb import LMDBImageDataset, chexpert_indexer

@@ -125,6 +125,8 @@ class CONFIG:
     PSP_LOSS_LPIPS = float(ENV.get("PSP_LOSS_LPIPS", 0))
     PSP_LOSS_REG = float(ENV.get("PSP_LOSS_REG", 0))
     PSP_LOSS_DISCRIMINATOR = float(ENV.get("PSP_LOSS_DISCRIMINATOR", 0))
+    PSP_LOSS_SSIM = float(ENV.get("PSP_LOSS_SSIM", 0))
+    PSP_LOSS_SSIM_BONE = float(ENV.get("PSP_LOSS_SSIM_BONE", 0))
 
 
 def guard(create: bool = True):

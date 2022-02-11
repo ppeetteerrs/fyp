@@ -24,7 +24,7 @@ def covid_ct_indexer(idx: int) -> Tuple[bytes]:
     return tuple(
         [
             f"{str(idx).zfill(6)}_{img_type}".encode()
-            for img_type in ["raw", "localizer", "deep_drr"]
+            for img_type in ["raw", "localizer", "deep_drr", "bone"]
         ]
     )
 
@@ -44,6 +44,12 @@ def covid_ct_indexer_drr(idx: int) -> Tuple[bytes]:
     )
 
 
+def covid_ct_indexer_bone(idx: int) -> Tuple[bytes]:
+    return tuple(
+        [f"{str(idx).zfill(6)}_{img_type}".encode() for img_type in ["bone"]]
+    )
+
+
 class LMDBWriter(Generic[T]):
     def __init__(self, path: PathLike, indexer: Indexer[T]) -> None:
         self.path = path
@@ -53,7 +59,7 @@ class LMDBWriter(Generic[T]):
             readonly=False,
             readahead=False,
             meminit=False,
-            map_size=1024**4,
+            map_size=1024 ** 4,
         )
 
     def set(self, key: str, value: bytes):

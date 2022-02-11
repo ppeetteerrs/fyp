@@ -12,6 +12,8 @@ from torch import Tensor
 from torch.optim.optimizer import Optimizer
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
+from torchgeometry.losses import SSIM
+from torchvision.transforms.functional import equalize
 from torchvision.utils import save_image
 from tqdm import tqdm
 
@@ -31,10 +33,11 @@ class Coach:
 
         # Utility functions
         self.id_loss = IDLoss().to("cuda").eval()
-        self.lpips_loss = lpips.LPIPS().to("cuda").eval()
+        self.lpips_loss = lpips.LPIPS(net="vgg").to("cuda").eval()
         self.reg_loss = RegLoss().to("cuda").eval()
-        self.discriminator_id_loss = DiscriminatorIDLoss().to("cuda").eval()
-        self.discriminator_loss = DiscriminatorLoss().to("cuda").eval()
+        # self.discriminator_id_loss = DiscriminatorIDLoss().to("cuda").eval()
+        # self.discriminator_loss = DiscriminatorLoss().to("cuda").eval()
+        self.ssim = SSIM(11, "mean", 1)
 
         # Initialize optimizer
         self.optimizer: Optimizer
@@ -109,13 +112,16 @@ class Coach:
         ):
 
             # Configure input and target images
-            img_in, img_out, img_style, w_plus = self.forward_pass(
-                next(self.train_dataloader)
-            )
+            raw, loc, drr, bone = [
+                item.to("cuda") for item in next(self.train_dataloader)
+            ]
+            img_in, img_out, img_style, w_plus = self.forward_pass((raw, loc))
+
+            # style_bone = ((img_style + 1) * (bone + 1)) / 2 - 1
 
             # Calculate loss
             loss, loss_dict, img_in_save = self.calc_loss(
-                img_in, img_out, img_style, w_plus
+                img_in, img_out, img_style, bone, w_plus
             )
 
             # Back propagation
@@ -128,7 +134,10 @@ class Coach:
             # Logging
             if step % CONFIG.PSP_SAMPLE_INTERVAL == 0:
                 save_image(
-                    torch.concat([img_in_save, img_style, img_out], dim=3),
+                    torch.concat(
+                        [img_in_save, img_out, drr, img_style, bone],
+                        dim=3,
+                    ),
                     str(CONFIG.OUTPUT_DIR / "sample" / f"{str(step).zfill(6)}.png"),
                     nrow=1,
                     normalize=True,
@@ -161,12 +170,22 @@ class Coach:
         test_imgs = []
 
         for _, batch in enumerate(self.test_dataloader):
+            raw, loc, drr, bone = [item.to("cuda") for item in batch]
             with torch.no_grad():
-                img_in, img_out, img_style, w_plus = self.forward_pass(batch)
+
+                img_in, img_out, img_style, w_plus = self.forward_pass((raw, loc))
+
+                # style_bone = ((img_style + 1) * (bone + 1)) / 2 - 1
+
                 _, loss_dict, img_in_save = self.calc_loss(
-                    img_in, img_out, img_style, w_plus
+                    img_in, img_out, img_style, bone, w_plus
                 )
-                test_imgs.append(torch.concat([img_in_save, img_style, img_out], dim=3))
+                test_imgs.append(
+                    torch.concat(
+                        [img_in_save, img_out, drr, img_style, bone],
+                        dim=3,
+                    )
+                )
             loss_dicts.append(loss_dict)
 
         save_image(
@@ -185,7 +204,7 @@ class Coach:
         self, tensors: Tuple[Tensor, ...]
     ) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
         # Concat image along channel direction
-        img_in = torch.cat([img.to("cuda") for img in tensors], dim=1).contiguous()
+        img_in = torch.cat([img for img in tensors], dim=1)
 
         img_out: Tensor
         img_style: Tensor
@@ -194,7 +213,12 @@ class Coach:
         return img_in, img_out, img_style, w_plus
 
     def calc_loss(
-        self, img_in: Tensor, img_out: Tensor, img_style: Tensor, w_plus: Tensor
+        self,
+        img_in: Tensor,
+        img_out: Tensor,
+        img_style: Tensor,
+        img_bone: Tensor,
+        w_plus: Tensor,
     ) -> Tuple[Tensor, Dict[str, float], Tensor]:
         loss_dict = {}
         loss: Any = 0.0
@@ -211,17 +235,17 @@ class Coach:
 
         # L2 loss
         if CONFIG.PSP_LOSS_L2 > 0:
-            loss_l2 = F.mse_loss(img_style, img_in_list[0])
+            loss_l2_style_in = F.mse_loss(img_style, img_in_list[0])
 
-            loss_dict["loss_l2"] = float(loss_l2)
-            loss += loss_l2 * CONFIG.PSP_LOSS_L2
+            loss_dict["loss_l2_style_in"] = float(loss_l2_style_in)
+            loss += loss_l2_style_in * CONFIG.PSP_LOSS_L2
 
         # L2 loss
         if CONFIG.PSP_LOSS_L2_STYLE > 0:
-            loss_l2_style = F.mse_loss(img_out, img_style)
+            loss_ls_out_style = F.mse_loss(img_out, img_style)
 
-            loss_dict["loss_l2_style"] = float(loss_l2_style)
-            loss += loss_l2_style * CONFIG.PSP_LOSS_L2_STYLE
+            loss_dict["loss_ls_out_style"] = float(loss_ls_out_style)
+            loss += loss_ls_out_style * CONFIG.PSP_LOSS_L2_STYLE
 
         # ID loss
         if CONFIG.PSP_LOSS_ID > 0:
@@ -243,7 +267,7 @@ class Coach:
         # # Reg loss
         if CONFIG.PSP_LOSS_LPIPS > 0:
             loss_lpips = 0.0
-            for img_in_item in img_in_list:
+            for img_in_item in img_in_list[:1]:
                 loss_lpips_item = self.lpips_loss(
                     img_out_rgb, img_in_item.expand(-1, 3, -1, -1)
                 )
@@ -252,30 +276,42 @@ class Coach:
             loss += loss_lpips * CONFIG.PSP_LOSS_LPIPS
 
         # Discriminator losses
-        if self.net.discriminator is not None:
-            d_score: Tensor
-            d_features_out: Tensor
-            d_score, d_features_out = self.net.discriminator.forward(
-                img_out, return_features=True
-            )
-            # Discriminator ID loss
-            if CONFIG.PSP_LOSS_ID_DISCRIMINATOR > 0:
-                loss_discriminator_id = 0.0
-                for img_in_item in img_in_list:
-                    _, d_features_loss = self.net.discriminator(
-                        img_in_item, return_features=True
-                    )
-                    loss_discriminator_id += self.discriminator_id_loss(
-                        d_features_out, d_features_loss
-                    )
-                loss_dict["loss_discriminator_id"] = float(loss_discriminator_id)
-                loss += loss_discriminator_id * CONFIG.PSP_LOSS_ID_DISCRIMINATOR
+        # if self.net.discriminator is not None:
+        #     d_score: Tensor
+        #     d_features_out: Tensor
+        #     d_score, d_features_out = self.net.discriminator.forward(
+        #         img_out, return_features=True
+        #     )
+        #     # Discriminator ID loss
+        #     if CONFIG.PSP_LOSS_ID_DISCRIMINATOR > 0:
+        #         loss_discriminator_id = 0.0
+        #         for img_in_item in img_in_list:
+        #             _, d_features_loss = self.net.discriminator(
+        #                 img_in_item, return_features=True
+        #             )
+        #             loss_discriminator_id += self.discriminator_id_loss(
+        #                 d_features_out, d_features_loss
+        #             )
+        #         loss_dict["loss_discriminator_id"] = float(loss_discriminator_id)
+        #         loss += loss_discriminator_id * CONFIG.PSP_LOSS_ID_DISCRIMINATOR
 
-            # Discriminator loss
-            if CONFIG.PSP_LOSS_DISCRIMINATOR > 0:
-                loss_discriminator: Tensor = self.discriminator_loss(d_score)
-                loss_dict["loss_discriminator"] = float(loss_discriminator)
-                loss += loss_discriminator * CONFIG.PSP_LOSS_DISCRIMINATOR
+        #     # Discriminator loss
+        #     if CONFIG.PSP_LOSS_DISCRIMINATOR > 0:
+        #         loss_discriminator: Tensor = self.discriminator_loss(d_score)
+        #         loss_dict["loss_discriminator"] = float(loss_discriminator)
+        #         loss += loss_discriminator * CONFIG.PSP_LOSS_DISCRIMINATOR
+
+        if CONFIG.PSP_LOSS_SSIM > 0:
+            loss_ssim = self.ssim(img_out, img_in_list[1])
+            loss_dict["loss_ssim"] = float(loss_ssim)
+            loss += loss_ssim * CONFIG.PSP_LOSS_SSIM
+
+        # L2 loss
+        if CONFIG.PSP_LOSS_SSIM_BONE > 0:
+            loss_ssim_bone = self.ssim(img_out, img_bone)
+
+            loss_dict["loss_ssim_bone"] = float(loss_ssim_bone)
+            loss += loss_ssim_bone * CONFIG.PSP_LOSS_SSIM_BONE
 
         # Accumulate loss
         loss_dict["loss"] = float(loss)
