@@ -1,13 +1,9 @@
-import shutil as sh
 from argparse import ArgumentParser
-from distutils.util import strtobool
 from os import environ as ENV
 from pathlib import Path
-from typing import Callable, Dict, List, TypeVar, cast
 
 from dotenv import load_dotenv
 from IPython import get_ipython
-from stylegan2_torch import Resolution
 
 ip = get_ipython()
 
@@ -17,14 +13,19 @@ parser.add_argument(
     "--env", type=str, default=".env", help="Environment (settings) file"
 )
 
-project_dir = Path(ENV.get("PROJECT_DIR", ""))
-load_dotenv(project_dir / ".env", override=True)
+load_dotenv(".env", override=True)
 
 if ip is None:
-    env_file: Path = (project_dir / parser.parse_args().env).resolve()
+    env_file: Path = Path(parser.parse_args().env)
     print(f"Using environment file: {env_file}")
 
     load_dotenv(env_file, override=True)
+
+import shutil as sh
+from distutils.util import strtobool
+from typing import Callable, Dict, List, TypeVar, cast
+
+from stylegan2_torch import Resolution
 
 T = TypeVar("T")
 
@@ -60,8 +61,8 @@ class CONFIG:
     DATA_DIR = PROJECT_DIR / "input/data"
     CHEXPERT_TRAIN_LMDB = DATA_DIR / "chexpert_train"
     CHEXPERT_TEST_LMDB = DATA_DIR / "chexpert_test"
-    COVID_19_TRAIN_LMDB = DATA_DIR / "covid_train"
-    COVID_19_TEST_LMDB = DATA_DIR / "covid_test"
+    COVID_19_TRAIN_LMDB = DATA_DIR / "covid_ct_train"
+    COVID_19_TEST_LMDB = DATA_DIR / "covid_ct_test"
 
     # Output
     OUTPUT_DIR = Path(PROJECT_DIR / "output" / EXPERIMENT_NAME)
@@ -100,7 +101,7 @@ class CONFIG:
 
     # pSp Model
     PSP_IN_CHANNEL = int(ENV.get("PSP_IN_CHANNEL", 1))
-    PSP_ENCODER: str = env_or("PSP_ENCODER", "original", "deep")
+    # PSP_ENCODER: str = env_or("PSP_ENCODER", "original", "deep")
     PSP_MERGER_LAYERS = int(ENV.get("PSP_MERGER_LAYERS", 5))
     PSP_MERGER_CHANNELS = int(ENV.get("PSP_MERGER_CHANNELS", 128))
     PSP_USE_MEAN: bool = to_bool("PSP_USE_MEAN")
@@ -114,7 +115,7 @@ class CONFIG:
 
     PSP_SAMPLE_INTERVAL = int(ENV.get("PSP_SAMPLE_INTERVAL", 0))
     PSP_TEST_INTERVAL = int(ENV.get("PSP_TEST_INTERVAL", 0))
-    PSP_TEST_SAMPLES = int(ENV.get("PSP_TEST_SAMPLES", 0))
+    PSP_TEST_BATCHES = int(ENV.get("PSP_TEST_BATCHES", 10000))
     PSP_CKPT_INTERVAL = int(ENV.get("PSP_CKPT_INTERVAL", 0))
 
     # pSp Training
@@ -127,6 +128,19 @@ class CONFIG:
     PSP_LOSS_DISCRIMINATOR = float(ENV.get("PSP_LOSS_DISCRIMINATOR", 0))
     PSP_LOSS_SSIM = float(ENV.get("PSP_LOSS_SSIM", 0))
     PSP_LOSS_SSIM_BONE = float(ENV.get("PSP_LOSS_SSIM_BONE", 0))
+
+    # Classifier Training
+    EFF_ARCH = ENV.get("EFF_ARCH", "")
+    EFF_TRAIN_POSITIVE = ENV.get("EFF_TRAIN_POSITIVE", "")
+    EFF_TRAIN_NEGATIVE = ENV.get("EFF_TRAIN_NEGATIVE", "")
+    EFF_TEST_POSITIVE = ENV.get("EFF_TEST_POSITIVE", "")
+    EFF_TEST_NEGATIVE = ENV.get("EFF_TEST_NEGATIVE", "")
+    EFF_ITER = int(ENV.get("EFF_ITER", 0))
+    EFF_BATCH_SIZE = int(ENV.get("EFF_BATCH_SIZE", 0))
+    EFF_LR = float(ENV.get("EFF_LR", 0))
+    EFF_CKPT = PROJECT_DIR / "input" / ENV.get("EFF_CKPT", "")
+    EFF_TEST_INTERVAL = int(ENV.get("EFF_TEST_INTERVAL", 0))
+    EFF_CKPT_INTERVAL = int(ENV.get("EFF_CKPT_INTERVAL", 0))
 
 
 def guard(create: bool = True):

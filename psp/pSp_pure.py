@@ -25,12 +25,6 @@ class pSp(nn.Module):
             CONFIG.BLUR_KERNEL,
         ).to("cuda")
 
-        self.merger = Merger(
-            CONFIG.PSP_IN_CHANNEL + 1,
-            CONFIG.PSP_MERGER_CHANNELS,
-            CONFIG.PSP_MERGER_LAYERS,
-        )
-
         if CONFIG.PSP_LOSS_ID_DISCRIMINATOR > 0 or CONFIG.PSP_LOSS_DISCRIMINATOR > 0:
             self.discriminator = Discriminator(
                 CONFIG.RESOLUTION, CONFIG.STYLEGAN_CHANNELS, CONFIG.BLUR_KERNEL
@@ -47,7 +41,6 @@ class pSp(nn.Module):
         else:
             self.encoder.load_state_dict(ckpt["encoder"], strict=True)
             self.decoder.load_state_dict(ckpt["decoder"], strict=True)
-            self.merger.load_state_dict(ckpt["merger"], strict=True)
             if self.discriminator is not None:
                 self.discriminator.load_state_dict(ckpt["discriminator"], strict=True)
             self.resumed = True
@@ -62,7 +55,7 @@ class pSp(nn.Module):
         else:
             self.latent_avg = None
 
-    def forward(self, input: Tensor) -> Tuple[Tensor, Tensor, Tensor]:
+    def forward(self, input: Tensor) -> Tuple[Tensor, Tensor]:
         # Input is n_channel image
 
         codes = self.encoder(input)
@@ -75,7 +68,4 @@ class pSp(nn.Module):
             [codes], return_latents=False, input_type="w_plus", noises=None
         )
 
-        merger_input = torch.cat((input, styled_images), dim=1).contiguous()
-        output_images = self.merger(merger_input)
-
-        return output_images, styled_images, codes
+        return styled_images, codes

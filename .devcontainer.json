@@ -1,6 +1,5 @@
 {
-	"dockerFile": "Dockerfile",
-	"context": ".",
+	"image": "ppeetteerrs/fyp:training_server",
 	"runArgs": [
 		"--shm-size=1g",
 		"--gpus",
@@ -17,9 +16,6 @@
 	"extensions": [
 		"ms-python.vscode-pylance",
 		"ms-python.python",
-		"ms-vscode.cpptools",
-		"ms-vscode.cpptools-extension-pack",
-		"nvidia.nsight-vscode-edition",
 		"trungngo.autoflake",
 		"kevinkyang.auto-comment-blocks",
 		"ms-toolsai.jupyter",
@@ -28,28 +24,15 @@
 		"njpwerner.autodocstring",
 	],
 	"settings": {
-		"C_Cpp.default.includePath": [
-			"/opt/conda/lib/python3.8/site-packages/torch/include/torch/csrc/api/include/",
-			"/opt/conda/lib/python3.8/site-packages/torch/include/",
-			"/opt/conda/include/python3.8/",
-			"/usr/local/cuda/targets/x86_64-linux/include/"
-		],
 		"python.analysis.typeCheckingMode": "basic",
 		"python.analysis.diagnosticSeverityOverrides": {
 			"reportPrivateImportUsage": "none"
 		},
-		"python.sortImports.path": "/home/user/.conda/envs/user/bin/isort",
-		"python.autoComplete.extraPaths": [
-			"${workspaceFolder}/**/*",
-			"/home/user/.conda/envs/user/pkgs/libopencv-4.5.2-py38hcdf9bf1_0/lib/*"
-		],
-		"python.analysis.extraPaths": [
-			"${workspaceFolder}/**/*",
-			"/home/user/.conda/envs/user/pkgs/libopencv-4.5.2-py38hcdf9bf1_0/lib/*"
-		],
+		"python.sortImports.path": "/home/user/mambaforge/envs/user/bin/isort",
 		"python.linting.flake8Args": [
 			"--ignore=E402,E203",
 			"--max-line-length=120"
-		]
+		],
+		"terminal.integrated.defaultProfile.linux": "zsh"
 	},
 }
