@@ -1,11 +1,11 @@
 from typing import Any, Dict, Optional, Tuple
 
 import torch
-from stylegan2_torch import Discriminator, Generator
+from stylegan2_torch import Generator
 from torch import Tensor, nn
 from utils.config import CONFIG
 
-from psp.encoder import Encoder, EncoderDeep
+from psp.encoder import Encoder
 from psp.merger import Merger
 
 
@@ -14,7 +14,7 @@ class pSp(nn.Module):
         super().__init__()
 
         # Define architecture
-        self.encoder = Encoder(CONFIG.PSP_IN_CHANNEL, CONFIG.RESOLUTION).to("cuda")
+        self.encoder = Encoder(len(CONFIG.PSP_IN), CONFIG.RESOLUTION).to("cuda")
 
         self.decoder = Generator(
             CONFIG.RESOLUTION,
@@ -26,30 +26,19 @@ class pSp(nn.Module):
         ).to("cuda")
 
         self.merger = Merger(
-            CONFIG.PSP_IN_CHANNEL + 1,
+            len(CONFIG.PSP_MERGE),
             CONFIG.PSP_MERGER_CHANNELS,
             CONFIG.PSP_MERGER_LAYERS,
         )
 
-        if CONFIG.PSP_LOSS_ID_DISCRIMINATOR > 0 or CONFIG.PSP_LOSS_DISCRIMINATOR > 0:
-            self.discriminator = Discriminator(
-                CONFIG.RESOLUTION, CONFIG.STYLEGAN_CHANNELS, CONFIG.BLUR_KERNEL
-            ).to("cuda")
-        else:
-            self.discriminator = None
-
         # Load model checkpoints
         if "g_ema" in ckpt:
             self.decoder.load_state_dict(ckpt["g_ema"], strict=True)
-            if self.discriminator is not None:
-                self.discriminator.load_state_dict(ckpt["d"], strict=True)
             self.resumed = False
         else:
             self.encoder.load_state_dict(ckpt["encoder"], strict=True)
             self.decoder.load_state_dict(ckpt["decoder"], strict=True)
             self.merger.load_state_dict(ckpt["merger"], strict=True)
-            if self.discriminator is not None:
-                self.discriminator.load_state_dict(ckpt["discriminator"], strict=True)
             self.resumed = True
 
         # Load latent average

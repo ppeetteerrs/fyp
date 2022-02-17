@@ -1,5 +1,5 @@
 {
-	"image": "ppeetteerrs/fyp:training_server",
+	"image": "ppeetteerrs/fyp:training",
 	"runArgs": [
 		"--shm-size=1g",
 		"--gpus",

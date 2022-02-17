@@ -1,19 +1,9 @@
+
 import torch
 from torch import Tensor, nn
-from torch.nn import (
-    AdaptiveAvgPool2d,
-    BatchNorm1d,
-    BatchNorm2d,
-    Conv2d,
-    Dropout,
-    Flatten,
-    Linear,
-    MaxPool2d,
-    PReLU,
-    ReLU,
-    Sequential,
-    Sigmoid,
-)
+from torch.nn import (AdaptiveAvgPool2d, BatchNorm1d, BatchNorm2d, Conv2d,
+                      Dropout, Flatten, Linear, MaxPool2d, PReLU, ReLU,
+                      Sequential, Sigmoid)
 from utils.config import CONFIG
 
 
@@ -138,15 +128,3 @@ class IDLoss(nn.Module):
 
         return loss / n_samples
 
-
-class DiscriminatorIDLoss(nn.Module):
-    def forward(self, y_hat_features: Tensor, y_features: Tensor) -> float:
-        n_samples = y_features.shape[0]
-        y_hat_features = l2_norm(y_hat_features)
-        y_features = l2_norm(y_features).detach()
-        loss = 0
-        for i in range(n_samples):
-            diff_target = y_hat_features[i].dot(y_features[i])
-            loss += 1 - diff_target
-
-        return loss / n_samples

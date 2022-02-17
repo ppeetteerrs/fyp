@@ -14,7 +14,7 @@ def load_PIL(path: Path) -> Image.Image:
         return ImageOps.grayscale(img)
 
 
-transform: Callable[..., Tensor] = transforms.Compose(
+transform = transforms.Compose(
     [
         # Converts 8-bit PIL to (0, 1)
         transforms.ToTensor(),

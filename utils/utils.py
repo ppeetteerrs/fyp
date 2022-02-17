@@ -1,12 +1,11 @@
-import os
 from datetime import timedelta
 from pathlib import Path
-from typing import (Any, Generator, Iterable, List, Optional, Sequence,
+from typing import (Any, Dict, Generator, Iterable, List, Optional, Sequence,
                     TypeVar, Union)
 
-from rich import print
 from rich.progress import BarColumn, Progress, ProgressColumn, Task, TextColumn
 from rich.text import Text
+from torch import Tensor
 from torch.utils.data.dataloader import DataLoader
 
 PathLike = Union[str, Path]
@@ -111,3 +110,9 @@ def track(
             description=description,
             update_period=0.1,
         )
+
+
+def to_device(
+    tensor_dict: Dict[str, Tensor], device: str = "cuda"
+) -> Dict[str, Tensor]:
+    return {k: v.to(device) for k, v in tensor_dict.items()}

@@ -148,7 +148,7 @@ class Coach:
             if step % CONFIG.PSP_TEST_INTERVAL == 0:
                 _ = self.test(step)
 
-            if step % CONFIG.PSP_CKPT_INTERVAL == 00:
+            if step % CONFIG.PSP_CKPT_INTERVAL == 0:
                 torch.save(
                     {
                         "encoder": self.net.encoder.state_dict(),
