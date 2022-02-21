@@ -26,10 +26,11 @@ class pSp(nn.Module):
         ).to("cuda")
 
         self.merger = Merger(
-            len(CONFIG.PSP_MERGE),
+            len(CONFIG.PSP_MERGER) + 1,
             CONFIG.PSP_MERGER_CHANNELS,
             CONFIG.PSP_MERGER_LAYERS,
         )
+        self.train_encoder: bool = ("merger" in ckpt) or ("g_ema" in ckpt)
 
         # Load model checkpoints
         if "g_ema" in ckpt:
@@ -38,7 +39,8 @@ class pSp(nn.Module):
         else:
             self.encoder.load_state_dict(ckpt["encoder"], strict=True)
             self.decoder.load_state_dict(ckpt["decoder"], strict=True)
-            self.merger.load_state_dict(ckpt["merger"], strict=True)
+            if self.train_encoder:
+                self.merger.load_state_dict(ckpt["merger"], strict=True)
             self.resumed = True
 
         # Load latent average
@@ -51,7 +53,9 @@ class pSp(nn.Module):
         else:
             self.latent_avg = None
 
-    def forward(self, input: Tensor) -> Tuple[Tensor, Tensor, Tensor]:
+    def forward(
+        self, input: Tensor, merger_input: Tensor
+    ) -> Tuple[Tensor, Tensor, Tensor]:
         # Input is n_channel image
 
         codes = self.encoder(input)
@@ -64,7 +68,7 @@ class pSp(nn.Module):
             [codes], return_latents=False, input_type="w_plus", noises=None
         )
 
-        merger_input = torch.cat((input, styled_images), dim=1).contiguous()
+        merger_input = torch.cat((merger_input, styled_images), dim=1).contiguous()
         output_images = self.merger(merger_input)
 
         return output_images, styled_images, codes

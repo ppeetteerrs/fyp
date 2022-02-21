@@ -1,4 +1,3 @@
-
 from utils.config import CONFIG, guard
 
 guard()
@@ -10,6 +9,7 @@ from typing import Any, Dict, List, Tuple
 import lpips
 import torch
 import torch.nn.functional as F
+from rich import print
 from torch import Tensor
 from torch.optim.optimizer import Optimizer
 from torch.utils.data import DataLoader
@@ -18,8 +18,7 @@ from torchgeometry.losses import SSIM
 from torchvision.utils import save_image
 from tqdm import tqdm
 
-from psp.loss_fn.discriminator_loss import (DenseDiscriminator,
-                                            DiscriminatorLoss, IDLoss)
+from psp.loss_fn.discriminator_loss import DenseDiscriminator, DiscriminatorLoss, IDLoss
 from psp.loss_fn.reg_loss import RegLoss
 from psp.pSp import pSp
 from psp.ranger import Ranger
@@ -42,10 +41,18 @@ class Coach:
 
         # Initialize optimizer
         self.optimizer: Optimizer
-        self.optimizer = Ranger(
-            [*self.net.encoder.parameters(), *self.net.merger.parameters()],
-            lr=CONFIG.PSP_LR,
-        )
+        if self.net.train_encoder:
+            print("[bold cyan]Training full pSp")
+            self.optimizer = Ranger(
+                [*self.net.encoder.parameters(), *self.net.merger.parameters()],
+                lr=CONFIG.PSP_LR,
+            )
+        else:
+            print("[bold cyan]Only training merger")
+            self.optimizer = Ranger(
+                self.net.merger.parameters(),
+                lr=CONFIG.PSP_LR,
+            )
 
         # Initialize dataset
         self.train_dataset = MulticlassImageDataset(
@@ -53,14 +60,15 @@ class Coach:
                 CONFIG.PROJECT_DIR / "input/data" / "lidc/train",
                 CONFIG.PROJECT_DIR / "input/data" / "covid_ct/train",
             ],
-            ["lung", "localizer", "bones", "drr"],
+            ["lung", "localizer", "bones", "drr", "soft"],
         )
         self.test_dataset = MulticlassImageDataset(
             [
                 CONFIG.PROJECT_DIR / "input/data" / "lidc/test",
                 CONFIG.PROJECT_DIR / "input/data" / "covid_ct/test",
             ],
-            ["lung", "localizer", "bones", "drr"],
+            ["lung", "localizer", "bones", "drr", "soft"],
+            length=CONFIG.PSP_BATCH_SIZE * CONFIG.PSP_TEST_BATCHES,
         )
 
         self.train_dataloader = repeat(
@@ -90,7 +98,7 @@ class Coach:
         self.checkpoint_dir = CONFIG.OUTPUT_DIR / "checkpoint"
 
         self.start_iter = 0
-        if self.net.resumed:
+        if self.net.resumed and self.net.train_encoder:
             self.start_iter = int(os.path.splitext(CONFIG.PSP_CKPT.stem)[0])
             self.optimizer.load_state_dict(ckpt["optim"])
 
@@ -134,6 +142,7 @@ class Coach:
                             imgs["drr"],
                             imgs["style"],
                             imgs["bones"],
+                            imgs["soft"],
                         ],
                         dim=3,
                     ),
@@ -166,10 +175,6 @@ class Coach:
         test_imgs = []
 
         for _, batch in enumerate(self.test_dataloader):
-            lung: Tensor = batch["lung"].to("cuda")
-            loc: Tensor = batch["localizer"].to("cuda")
-            bones: Tensor = batch["bones"].to("cuda")
-            drr: Tensor = batch["drr"].to("cuda")
             with torch.no_grad():
                 batch = to_device(batch)
 
@@ -184,6 +189,7 @@ class Coach:
                             imgs["drr"],
                             imgs["style"],
                             imgs["bones"],
+                            imgs["soft"],
                         ],
                         dim=3,
                     )
@@ -206,12 +212,13 @@ class Coach:
 
         # Concat image along channel direction
         img_in = torch.cat([imgs[key] for key in CONFIG.PSP_IN], dim=1)
+        img_merger = torch.cat([imgs[key] for key in CONFIG.PSP_MERGER], dim=1)
 
         img_out: Tensor
         img_style: Tensor
         w_plus: Tensor
 
-        img_out, img_style, w_plus = self.net(img_in)
+        img_out, img_style, w_plus = self.net(img_in, img_merger)
         return {**imgs, "style": img_style, "out": img_out}, w_plus
 
     def calc_loss(

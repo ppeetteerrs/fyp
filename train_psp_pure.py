@@ -2,29 +2,26 @@ from utils.config import CONFIG, guard
 
 guard()
 
-# Use StyleGAN output directly
 
 import os
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Literal, Tuple
 
 import lpips
 import torch
 import torch.nn.functional as F
 from torch import Tensor
-from torch.optim.optimizer import Optimizer
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from torchgeometry.losses import SSIM
 from torchvision.utils import save_image
 from tqdm import tqdm
 
-from psp.loss_fn.discriminator_loss import DiscriminatorLoss
-from psp.loss_fn.id_loss import DiscriminatorIDLoss, IDLoss
+from psp.loss_fn.discriminator_loss import DenseDiscriminator, DiscriminatorLoss, IDLoss
 from psp.loss_fn.reg_loss import RegLoss
 from psp.pSp_pure import pSp
 from psp.ranger import Ranger
 from utils.dataset import MulticlassImageDataset
-from utils.utils import repeat
+from utils.utils import repeat, to_device
 
 
 class Coach:
@@ -33,40 +30,34 @@ class Coach:
         self.net = pSp(ckpt).to("cuda")
 
         # Utility functions
-        self.id_loss = IDLoss().to("cuda").eval()
         self.lpips_loss = lpips.LPIPS(net="vgg").to("cuda").eval()
         self.reg_loss = RegLoss().to("cuda").eval()
-        self.discriminator_id_loss = DiscriminatorIDLoss().to("cuda").eval()
+        self.id_loss = IDLoss().to("cuda").eval()
+        self.discriminator = DenseDiscriminator().to("cuda").eval()
         self.discriminator_loss = DiscriminatorLoss().to("cuda").eval()
-        self.ssim = SSIM(11, "mean", 1)
+        self.ssim = SSIM(11, "mean", 2)
 
         # Initialize optimizer
-        self.optimizer: Optimizer
-        if CONFIG.PSP_OPTIM == "adam":
-            self.optimizer = torch.optim.Adam(
-                self.net.encoder.parameters(),
-                lr=CONFIG.PSP_LR,
-            )
-        else:
-            self.optimizer = Ranger(
-                self.net.encoder.parameters(),
-                lr=CONFIG.PSP_LR,
-            )
+        self.optimizer = Ranger(
+            self.net.encoder.parameters(),
+            lr=CONFIG.PSP_LR,
+        )
 
         # Initialize dataset
         self.train_dataset = MulticlassImageDataset(
             [
-                CONFIG.PROJECT_DIR / "input/data" / "lidc/train",
-                CONFIG.PROJECT_DIR / "input/data" / "covid_ct/train",
+                CONFIG.PROJECT_DIR / f"input/data/{item}/train"
+                for item in CONFIG.PSP_DATASETS
             ],
-            ["lung", "localizer", "bones", "drr"],
+            ["lung", "localizer", "bones", "drr", "soft"],
         )
         self.test_dataset = MulticlassImageDataset(
             [
-                CONFIG.PROJECT_DIR / "input/data" / "lidc/test",
-                CONFIG.PROJECT_DIR / "input/data" / "covid_ct/test",
+                CONFIG.PROJECT_DIR / f"input/data/{item}/test"
+                for item in CONFIG.PSP_DATASETS
             ],
-            ["lung", "localizer", "bones", "drr"],
+            ["lung", "localizer", "bones", "drr", "soft"],
+            length=CONFIG.PSP_BATCH_SIZE * CONFIG.PSP_TEST_BATCHES,
         )
 
         self.train_dataloader = repeat(
@@ -86,7 +77,7 @@ class Coach:
             shuffle=False,
             num_workers=2,
             prefetch_factor=CONFIG.PSP_BATCH_SIZE,
-            drop_last=True,
+            drop_last=False,
         )
 
         # Initialize logger
@@ -114,15 +105,13 @@ class Coach:
             dynamic_ncols=True,
             smoothing=0.01,
         ):
-            batch = next(self.train_dataloader)
-            lung: Tensor = batch["lung"].to("cuda")
-            drr: Tensor = batch["drr"].to("cuda")
+            batch = to_device(next(self.train_dataloader))
 
             # Configure input and target images
-            img_in, img_style, w_plus = self.forward_pass(lung)
+            imgs, w_plus = self.forward_pass(batch)
 
             # Calculate loss
-            loss, loss_dict = self.calc_loss(img_in, img_style, w_plus)
+            loss, loss_dict = self.calc_loss(imgs, w_plus)
 
             # Back propagation
             self.optimizer.zero_grad()
@@ -135,7 +124,14 @@ class Coach:
             if step % CONFIG.PSP_SAMPLE_INTERVAL == 0:
                 save_image(
                     torch.concat(
-                        [img_in, img_style, drr],
+                        [
+                            imgs["lung"],
+                            imgs["out"],
+                            imgs["drr"],
+                            imgs["bones"],
+                            imgs["soft"],
+                            imgs["combined"],
+                        ],
                         dim=3,
                     ),
                     str(CONFIG.OUTPUT_DIR / "sample" / f"{str(step).zfill(6)}.png"),
@@ -151,11 +147,9 @@ class Coach:
             if step % CONFIG.PSP_CKPT_INTERVAL == 0:
                 torch.save(
                     {
+                        "latent_avg": self.net.latent_avg,
                         "encoder": self.net.encoder.state_dict(),
                         "decoder": self.net.decoder.state_dict(),
-                        "discriminator": self.net.discriminator.state_dict()
-                        if self.net.discriminator is not None
-                        else None,
                         "optim": self.optimizer.state_dict(),
                         "config": CONFIG,
                     },
@@ -168,21 +162,26 @@ class Coach:
         loss_dicts: List[Dict[str, float]] = []
         test_imgs = []
 
-        for idx, batch in enumerate(self.test_dataloader):
-            lung: Tensor = batch["lung"].to("cuda")
-            drr: Tensor = batch["drr"].to("cuda")
+        for _, batch in enumerate(self.test_dataloader):
             with torch.no_grad():
+                batch = to_device(batch)
 
-                img_in, img_style, w_plus = self.forward_pass(lung)
+                imgs, w_plus = self.forward_pass(batch)
 
-                _, loss_dict = self.calc_loss(img_in, img_style, w_plus)
-                if idx < CONFIG.PSP_TEST_BATCHES:
-                    test_imgs.append(
-                        torch.concat(
-                            [img_in, img_style, drr],
-                            dim=3,
-                        )
+                _, loss_dict = self.calc_loss(imgs, w_plus)
+                test_imgs.append(
+                    torch.concat(
+                        [
+                            imgs["lung"],
+                            imgs["out"],
+                            imgs["drr"],
+                            imgs["bones"],
+                            imgs["soft"],
+                            imgs["combined"],
+                        ],
+                        dim=3,
                     )
+                )
             loss_dicts.append(loss_dict)
 
         save_image(
@@ -197,39 +196,118 @@ class Coach:
         self.log_metrics(step, loss_dict, prefix="test")
         return loss_dict
 
-    def forward_pass(self, img_in: Tensor) -> Tuple[Tensor, Tensor, Tensor]:
-        # Concat image along channel direction
+    def generate(self, name: Literal["train", "test"]):
+        output_folder = CONFIG.OUTPUT_DIR / f"generated/{name}"
+        output_folder.mkdir(parents=True, exist_ok=True)
+        dataset = self.train_dataset if name == "train" else self.test_dataset
+        dataloader = DataLoader(
+            dataset,
+            batch_size=1,
+            shuffle=False,
+            num_workers=2,
+            prefetch_factor=1,
+            drop_last=False,
+        )
 
-        img_style: Tensor
+        print(f"Generating {name} images")
+        with torch.no_grad():
+            for idx, item in tqdm(enumerate(dataloader)):
+                imgs = to_device(item)
+                output_imgs, w_plus = self.forward_pass(imgs)
+                save_image(
+                    output_imgs["out"],
+                    str(output_folder / f"{str(idx).zfill(6)}.png"),
+                    nrow=1,
+                    normalize=True,
+                    value_range=(-1, 1),
+                )
+
+    def mix(self, name: Literal["train", "test"]):
+        output_folder = CONFIG.OUTPUT_DIR / f"mixed/{name}"
+        output_folder.mkdir(parents=True, exist_ok=True)
+        dataset = self.train_dataset if name == "train" else self.test_dataset
+        dataloader = repeat(
+            DataLoader(
+                dataset,
+                batch_size=2,
+                shuffle=False,
+                num_workers=2,
+                prefetch_factor=2,
+                drop_last=True,
+            )
+        )
+
+        print(f"Mixing {name} images")
+        with torch.no_grad():
+            for idx in tqdm(list(range(len(dataset) * 3))):
+                items = next(dataloader)
+                imgs = to_device(items)
+                output_imgs, w_plus = self.mix_pass(imgs)
+                save_image(
+                    torch.concat(
+                        [
+                            output_imgs["lung1"],
+                            output_imgs["lung2"],
+                            output_imgs["out"],
+                        ],
+                        dim=3,
+                    ),
+                    str(output_folder / f"{str(idx).zfill(6)}.png"),
+                    nrow=1,
+                    normalize=True,
+                    value_range=(-1, 1),
+                )
+
+    def forward_pass(self, imgs: Dict[str, Tensor]) -> Tuple[Dict[str, Tensor], Tensor]:
+
+        # Concat image along channel direction
+        img_in = torch.cat([imgs[key] for key in CONFIG.PSP_IN], dim=1)
+
+        img_out: Tensor
         w_plus: Tensor
-        img_style, w_plus = self.net(img_in)
-        return img_in, img_style, w_plus
+
+        img_out, w_plus = self.net(img_in)
+        return {**imgs, "out": img_out}, w_plus
+
+    def mix_pass(self, imgs: Dict[str, Tensor]) -> Tuple[Dict[str, Tensor], Tensor]:
+
+        # Concat image along channel direction
+        img_in = torch.cat([imgs[key] for key in CONFIG.PSP_IN], dim=1)
+        img_in1 = img_in[0].unsqueeze(0)
+        img_in2 = img_in[1].unsqueeze(0)
+
+        img_out: Tensor
+        w_plus: Tensor
+
+        img_out, w_plus = self.net.mix((img_in1, img_in2))
+        return {"lung1": img_in1, "lung2": img_in2, "out": img_out}, w_plus
 
     def calc_loss(
         self,
-        img_in: Tensor,
-        img_style: Tensor,
+        imgs: Dict[str, Tensor],
         w_plus: Tensor,
     ) -> Tuple[Tensor, Dict[str, float]]:
-        loss_dict = {}
+        loss_dict: Dict[str, float] = {}
         loss: Any = 0.0
-        # img_in: (N, in_channel, H, W)
-        # img_in_list: list of length in_channel, each (N, 1, H, W)
-        # img_in_save: (N, 1, H, W * in_channel)
-        # img_out: (N, 1, H, W)
-        # img_out_rgb: (N, 3, H, W)
-        # img_style: (N, 1, H, W)
 
-        # style_bone = ((img_style + 1) * (bone + 1)) / 2 - 1
+        for img1, img2, weight in CONFIG.PSP_LOSS_L2:
+            loss_l2 = F.mse_loss(imgs[img1], imgs[img2])
+            loss_dict[f"loss_l2_{img1}:{img2}"] = float(loss_l2)
+            loss += loss_l2 * weight
 
-        img_style_rgb = img_style.expand(-1, 3, -1, -1)
+        if CONFIG.PSP_LOSS_DISCRIMINATOR > 0:
+            score, _ = self.discriminator(imgs["out"])
+            loss_discriminator, prob = self.discriminator_loss(score)
+            loss_dict["loss_discriminator"] = float(loss_discriminator)
+            loss_dict["prob_discriminator"] = float(prob)
+            loss += loss_discriminator * CONFIG.PSP_LOSS_DISCRIMINATOR
 
-        # L2 loss
-        if CONFIG.PSP_LOSS_L2 > 0:
-            loss_l2_style_in = F.mse_loss(img_style, img_in)
-
-            loss_dict["loss_l2_style_in"] = float(loss_l2_style_in)
-            loss += loss_l2_style_in * CONFIG.PSP_LOSS_L2
+        for img1, img2, weight in CONFIG.PSP_LOSS_ID:
+            _, features1 = self.discriminator(imgs[img1])
+            _, features2 = self.discriminator(imgs[img2])
+            loss_id = self.id_loss.forward(features1, features2)
+            loss_dict[f"loss_id_{img1}:{img2}"] = float(loss_id)
+            loss += loss_id * weight
 
         # Reg loss
         if CONFIG.PSP_LOSS_REG > 0:
@@ -237,45 +315,19 @@ class Coach:
             loss_dict["loss_reg"] = float(loss_reg)
             loss += loss_reg * CONFIG.PSP_LOSS_REG
 
-        # LPIPS loss
-        if CONFIG.PSP_LOSS_LPIPS > 0:
-            loss_lpips = 0.0
-            loss_lpips_item = self.lpips_loss(
-                img_style_rgb, img_in.expand(-1, 3, -1, -1)
+        for img1, img2, weight in CONFIG.PSP_LOSS_LPIPS:
+            loss_lpips = self.lpips_loss(
+                imgs[img1].expand(-1, 3, -1, -1), imgs[img2].expand(-1, 3, -1, -1)
             )
-            loss_lpips = torch.sum(loss_lpips_item) / img_in.shape[0]
-            loss_dict["loss_lpips"] = float(loss_lpips)
-            loss += loss_lpips * CONFIG.PSP_LOSS_LPIPS
+            loss_lpips = loss_lpips.mean()
+            loss_dict[f"loss_lpips_{img1}:{img2}"] = float(loss_lpips)
+            loss += loss_lpips * weight
 
-        # Discriminator losses
-        if self.net.discriminator is not None:
-            d_score: Tensor
-            d_features_out: Tensor
-            d_score, d_features_out = self.net.discriminator.forward(
-                img_style, return_features=True
-            )
-            # Discriminator ID loss
-            if CONFIG.PSP_LOSS_ID_DISCRIMINATOR > 0:
-                loss_discriminator_id = 0.0
-                _, d_features_loss = self.net.discriminator(
-                    img_in, return_features=True
-                )
-                loss_discriminator_id = self.discriminator_id_loss(
-                    d_features_out, d_features_loss
-                )
-                loss_dict["loss_discriminator_id"] = float(loss_discriminator_id)
-                loss += loss_discriminator_id * CONFIG.PSP_LOSS_ID_DISCRIMINATOR
-
-            # Discriminator loss
-            if CONFIG.PSP_LOSS_DISCRIMINATOR > 0:
-                loss_discriminator: Tensor = self.discriminator_loss(d_score)
-                loss_dict["loss_discriminator"] = float(loss_discriminator)
-                loss += loss_discriminator * CONFIG.PSP_LOSS_DISCRIMINATOR
-
-        if CONFIG.PSP_LOSS_SSIM > 0:
-            loss_ssim = self.ssim(img_style, img_in)
-            loss_dict["loss_ssim"] = float(loss_ssim)
-            loss += loss_ssim * CONFIG.PSP_LOSS_SSIM
+        for img1, img2, weight in CONFIG.PSP_LOSS_SSIM:
+            loss_ssim = self.ssim(imgs[img1], imgs[img2])
+            loss_ssim = loss_ssim.mean()
+            loss_dict[f"loss_ssim_{img1}:{img2}"] = float(loss_ssim)
+            loss += loss_ssim * weight
 
         # Accumulate loss
         loss_dict["loss"] = float(loss)
@@ -303,6 +355,10 @@ class Coach:
 def main():
     coach = Coach()
     coach.train()
+    coach.generate("train")
+    coach.generate("test")
+    coach.mix("train")
+    coach.mix("test")
 
 
 if __name__ == "__main__":

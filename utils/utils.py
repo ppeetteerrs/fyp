@@ -115,4 +115,6 @@ def track(
 def to_device(
     tensor_dict: Dict[str, Tensor], device: str = "cuda"
 ) -> Dict[str, Tensor]:
-    return {k: v.to(device) for k, v in tensor_dict.items()}
+    output = {k: v.to(device) for k, v in tensor_dict.items()}
+    output["combined"] = (output["bones"] + output["soft"] ) / 2
+    return output

@@ -117,7 +117,7 @@ class CONFIG:
 
     # pSp Model
     PSP_IN = ENV.get("PSP_IN", "").split(",")
-    PSP_MERGE = ENV.get("PSP_MERGE", "").split(",")
+    PSP_MERGER = ENV.get("PSP_MERGER", "").split(",")
     # PSP_ENCODER: str = env_or("PSP_ENCODER", "original", "deep")
     PSP_MERGER_LAYERS = int(ENV.get("PSP_MERGER_LAYERS", 5))
     PSP_MERGER_CHANNELS = int(ENV.get("PSP_MERGER_CHANNELS", 128))
@@ -136,6 +136,7 @@ class CONFIG:
     PSP_TEST_INTERVAL = int(ENV.get("PSP_TEST_INTERVAL", 0))
     PSP_TEST_BATCHES = int(ENV.get("PSP_TEST_BATCHES", 10000))
     PSP_CKPT_INTERVAL = int(ENV.get("PSP_CKPT_INTERVAL", 0))
+    PSP_DATASETS = ENV.get("PSP_DATASETS", "").split(",")
 
     # pSp Training
     PSP_LOSS_L2 = parse_loss(ENV.get("PSP_LOSS_L2", ""))

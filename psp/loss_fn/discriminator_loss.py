@@ -39,7 +39,7 @@ class DiscriminatorLoss(nn.Module):
         self.loss = nn.CrossEntropyLoss()
 
     def forward(self, pred: Tensor) -> Tuple[Tensor, Tensor]:
-        targ = Tensor([0 for _ in range(pred.shape[0])]).to(pred.device).long()
+        targ = Tensor([1 for _ in range(pred.shape[0])]).to(pred.device).long()
         loss = self.loss(pred, targ)
         prob = F.softmax(pred, dim=1)[:, 1].mean()
         return loss, prob
@@ -48,8 +48,8 @@ class DiscriminatorLoss(nn.Module):
 class IDLoss(nn.Module):
     def forward(self, y_hat_features: Tensor, y_features: Tensor) -> Tensor:
         n_samples = y_features.shape[0]
-        y_hat_features = l2_norm(y_hat_features)
-        y_features = l2_norm(y_features).detach()
+        y_hat_features = l2_norm(torch.flatten(y_hat_features, 1))
+        y_features = l2_norm(torch.flatten(y_features, 1)).detach()
         loss: Any = 0
         for i in range(n_samples):
             diff_target = y_hat_features[i].dot(y_features[i])
