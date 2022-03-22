@@ -36,7 +36,7 @@ class pSp(nn.Module):
         self.latent_avg: Optional[Tensor]
         if CONFIG.PSP_USE_MEAN:
             if "latent_avg" in ckpt:
-                self.latent_avg = ckpt["latent_avg"]
+                self.latent_avg = ckpt["latent_avg"].to("cuda")
             else:
                 self.latent_avg = self.decoder.mean_latent(10000, device="cuda")
         else:
@@ -61,7 +61,20 @@ class pSp(nn.Module):
         codes1 = self.encoder(inputs[0])
         codes2 = self.encoder(inputs[1])
 
-        codes = concat([codes1[:, :14, :], codes2[:, 14:, :]], dim=1)
+        codes = concat(
+            [
+                codes1[:, i : i + 1, :] if i % 2 == 0 else codes2[:, i : i + 1, :]
+                for i in range(codes1.shape[1])
+            ],
+            dim=1,
+        )
+
+        # codes = concat(
+        #     [codes1[:, :7, :], codes2[:, 7:, :]],
+        #     dim=1,
+        # )
+
+        # codes = (codes1 + codes2) / 2
 
         if self.latent_avg is not None:
             codes += self.latent_avg.repeat(codes.shape[0], 1, 1)

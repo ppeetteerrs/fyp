@@ -16,9 +16,10 @@ from torchgeometry.losses import SSIM
 from torchvision.utils import save_image
 from tqdm import tqdm
 
-from psp.loss_fn.discriminator_loss import DenseDiscriminator, DiscriminatorLoss, IDLoss
+from psp.loss_fn.discriminator_loss import (DenseDiscriminator,
+                                            DiscriminatorLoss, IDLoss)
 from psp.loss_fn.reg_loss import RegLoss
-from psp.pSp_pure import pSp
+from psp.pSp_deep import pSp
 from psp.ranger import Ranger
 from utils.dataset import MulticlassImageDataset
 from utils.utils import repeat, to_device

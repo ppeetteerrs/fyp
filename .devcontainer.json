@@ -1,5 +1,5 @@
 {
-	"image": "ppeetteerrs/fyp:training",
+	"image": "ppeetteerrs/fyp:server",
 	"runArgs": [
 		"--shm-size=1g",
 		"--gpus",
@@ -22,6 +22,7 @@
 		"yzhang.markdown-all-in-one",
 		"christian-kohler.path-intellisense",
 		"njpwerner.autodocstring",
+		"stackbreak.comment-divider"
 	],
 	"settings": {
 		"python.analysis.typeCheckingMode": "basic",
@@ -30,8 +31,8 @@
 		},
 		"python.sortImports.path": "/home/user/mambaforge/envs/user/bin/isort",
 		"python.linting.flake8Args": [
-			"--ignore=E402,E203",
-			"--max-line-length=120"
+			"--ignore=E402,E203,W503",
+			"--max-line-length=100"
 		],
 		"terminal.integrated.defaultProfile.linux": "zsh"
 	},

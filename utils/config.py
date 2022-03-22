@@ -68,7 +68,7 @@ class CONFIG:
 
     # Project
     PROJECT_DIR = Path(ENV.get("PROJECT_DIR", ""))
-    RESOLUTION: Resolution = cast(Resolution, int(ENV.get("RESOLUTION", "")))
+    RESOLUTION: Resolution = cast(Resolution, int(ENV.get("RESOLUTION", "256")))
 
     # Dataset
     CHEXPERT_DIR = Path(ENV.get("CHEXPERT_DIR", ""))

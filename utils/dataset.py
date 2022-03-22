@@ -82,6 +82,7 @@ class MulticlassImageDataset(TensorDataset):
             class_paths = chain.from_iterable(
                 class_folder.glob(pattern) for class_folder in class_folders
             )
+            self.class_paths = class_paths
             class_imgs = torch.stack(
                 [transform(load_PIL(path)) for path in class_paths]
             )

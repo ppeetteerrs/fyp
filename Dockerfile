@@ -1,3 +1,3 @@
-FROM ppeetteerrs/fyp:latest
+FROM ppeetteerrs/fyp:server
 
 CMD "zsh"
