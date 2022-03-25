@@ -1,3 +1,5 @@
+"""Ranger Optimizer"""
+
 import math
 from typing import Any
 
@@ -20,6 +22,9 @@ class Ranger(Optimizer):
         gc_conv_only=False
         # Gradient centralization on or off, applied to conv layers only or conv + fc layers
     ):
+        """
+        (Ranger Optimizer)[https://github.com/lessw2020/Ranger-Deep-Learning-Optimizer].
+        """
 
         # parameter checks
         if not 0.0 <= alpha <= 1.0:

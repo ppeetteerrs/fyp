@@ -137,3 +137,7 @@ input
 output
 parse_data.env
 bk
+.wand
+.wandb_key
+wandb
+docs/index.md
