@@ -17,7 +17,7 @@ class StyleGANTrain(Serializable):
     iterations: int = 8000000
     """Total number of training iterations."""
     batch_size: int = 8
-    """Training batch size."""
+    """Training batch size (per node)."""
     lr: float = 0.002
     """Learning rate."""
     mixing: float = 0.9
@@ -36,7 +36,7 @@ class StyleGANTrain(Serializable):
     """Interval to regularize generator."""
 
     # Logging
-    sample_size: int = 36
+    sample_size: int = 25
     """Number of samples to generate."""
     sample_interval: int = 500
     """Interval to generate samples."""

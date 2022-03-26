@@ -1,5 +1,5 @@
 """Train StyleGAN"""
-
+from os import environ
 from typing import cast
 
 import torch
@@ -12,7 +12,6 @@ from stylegan2_torch.loss import g_loss as get_g_loss
 from stylegan2_torch.loss import g_reg_loss as get_g_reg_loss
 from stylegan2_torch.utils import mixing_noise
 from torch import distributed, optim
-from torch.backends import cudnn
 from torch.nn.parallel import DistributedDataParallel
 from torch.utils.data import DataLoader, DistributedSampler
 from torchvision.utils import make_grid
@@ -30,7 +29,9 @@ class Task:
     def __init__(self) -> None:
 
         # Use deterministic algorithms
-        cudnn.deterministic = True
+
+        environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
+        torch.use_deterministic_algorithms(True)
 
         # Setup distributed process
         self.local_rank, self.world_size = setup_distributed()
