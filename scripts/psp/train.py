@@ -172,7 +172,7 @@ class Task:
         for step in tqdm(
             range(self.start_iter, TRAIN_OPTIONS.iterations + 1),
             initial=self.start_iter,
-            total=TRAIN_OPTIONS.iterations,
+            total=TRAIN_OPTIONS.iterations + 1,
             dynamic_ncols=True,
             smoothing=0.01,
         ):

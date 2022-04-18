@@ -14,7 +14,7 @@ class StyleGANTrain(Serializable):
     """
 
     # Training
-    iterations: int = 8000000
+    iterations: int = 800000
     """Total number of training iterations."""
     batch_size: int = 8
     """Training batch size (per node)."""
@@ -44,6 +44,20 @@ class StyleGANTrain(Serializable):
     """Interval to generate checkpoints."""
     dataset: str = "input/data/chexpert_train"
     """Path to lmdb image dataset."""
+
+
+@dataclass
+class StyleGANGenerate(Serializable):
+    """
+    StyleGAN Training Options
+    """
+
+    n_images: int = 2000
+    """Number of images to generate from noise."""
+    mixing: float = 0
+    """Style mixing probability."""
+    trunc: float = 1
+    """Truncation ratio. If 0.7 means 0.7 taken from noise, 0.3 from mean."""
 
 
 @dataclass
@@ -86,6 +100,8 @@ class StyleGANArch(StyleGANArchOptions, Serializable):
     StyleGAN Architecture Options
     """
 
-    cmd: StyleGANTrain = subparsers({"train": StyleGANTrain}, default=StyleGANTrain())
+    cmd: StyleGANTrain = subparsers(
+        {"train": StyleGANTrain, "generate": StyleGANGenerate}, default=StyleGANTrain()
+    )
     ckpt: Optional[str] = None
     """Path to pretrained StyleGAN."""

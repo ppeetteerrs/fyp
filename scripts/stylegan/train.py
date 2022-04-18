@@ -12,6 +12,7 @@ from stylegan2_torch.loss import g_loss as get_g_loss
 from stylegan2_torch.loss import g_reg_loss as get_g_reg_loss
 from stylegan2_torch.utils import mixing_noise
 from torch import distributed, optim
+from torch.backends.cudnn import benchmark
 from torch.nn.parallel import DistributedDataParallel
 from torch.utils.data import DataLoader, DistributedSampler
 from torchvision.utils import make_grid
@@ -29,9 +30,7 @@ class Task:
     def __init__(self) -> None:
 
         # Use deterministic algorithms
-
-        environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
-        torch.use_deterministic_algorithms(True)
+        benchmark = True
 
         # Setup distributed process
         self.local_rank, self.world_size = setup_distributed()
@@ -88,8 +87,6 @@ class Task:
             output_device=self.local_rank,
             broadcast_buffers=False,
         )
-        self.g_module = cast(Generator, self.generator.module)
-        self.d_module = cast(Discriminator, self.generator.module)
 
         self.discriminator = DistributedDataParallel(
             discriminator,
@@ -97,6 +94,8 @@ class Task:
             output_device=self.local_rank,
             broadcast_buffers=False,
         )
+        self.g_module = cast(Generator, self.generator.module)
+        self.d_module = cast(Discriminator, self.discriminator.module)
 
         # Setup Dataloader
         self.dataset = LMDBImageDataset(TRAIN_OPTIONS.dataset)
@@ -126,7 +125,7 @@ class Task:
             pbar = tqdm(
                 range(self.start_iter, TRAIN_OPTIONS.iterations + 1),
                 initial=self.start_iter,
-                total=TRAIN_OPTIONS.iterations,
+                total=TRAIN_OPTIONS.iterations + 1,
                 dynamic_ncols=True,
                 smoothing=0.01,
             )
