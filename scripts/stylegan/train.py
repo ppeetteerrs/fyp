@@ -4,7 +4,6 @@ from typing import cast
 
 import torch
 import wandb
-from dataset import LMDBImageDataset
 from stylegan2_torch import Discriminator, Generator
 from stylegan2_torch.loss import d_loss as get_d_loss
 from stylegan2_torch.loss import d_reg_loss as get_d_reg_loss
@@ -18,8 +17,9 @@ from torch.utils.data import DataLoader, DistributedSampler
 from torchvision.utils import make_grid
 from tqdm import tqdm
 from utils import accumulate, repeat
-from utils.cli import OPTIONS
+from utils.cli import OPTIONS, save_options
 from utils.cli.stylegan import StyleGANArch, StyleGANTrain
+from utils.dataset import LMDBImageDataset
 from utils.distributed import reduce_loss_dict, reduce_sum, setup_distributed
 
 ARCH_OPTIONS = cast(StyleGANArch, OPTIONS.arch)
@@ -143,7 +143,7 @@ class Task:
         for step in pbar:
 
             # Sample real image
-            real_img = next(self.loader)[0].to("cuda")
+            real_img = next(self.loader).to("cuda")
 
             # Only trains discriminator
             self.generator.requires_grad_(False)
@@ -299,4 +299,5 @@ class Task:
 
 
 def stylegan_train():
+    save_options()
     Task().train()

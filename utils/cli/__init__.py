@@ -53,5 +53,8 @@ else:
     else:
         OPTIONS = Options()
 
-OPTIONS.output_dir.mkdir(parents=True, exist_ok=True)
-OPTIONS.dump_yaml(open(OPTIONS.output_dir / "options.yaml", "w"))
+
+def save_options():
+    global OPTIONS
+    OPTIONS.output_dir.mkdir(parents=True, exist_ok=True)
+    OPTIONS.dump_yaml(open(OPTIONS.output_dir / "options.yaml", "w"))

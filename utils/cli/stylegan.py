@@ -43,7 +43,7 @@ class StyleGANTrain(Serializable):
     ckpt_interval: int = 100000
     """Interval to generate checkpoints."""
     dataset: str = "input/data/chexpert_train"
-    """Path to lmdb image dataset."""
+    """Paths to image LMDB dataset."""
 
 
 @dataclass

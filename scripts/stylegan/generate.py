@@ -4,22 +4,12 @@ from typing import cast
 
 import torch
 import wandb
-from dataset import LMDBImageDataset
-from stylegan2_torch import Discriminator, Generator
-from stylegan2_torch.loss import d_loss as get_d_loss
-from stylegan2_torch.loss import d_reg_loss as get_d_reg_loss
-from stylegan2_torch.loss import g_loss as get_g_loss
-from stylegan2_torch.loss import g_reg_loss as get_g_reg_loss
+from stylegan2_torch import Generator
 from stylegan2_torch.utils import mixing_noise
-from torch import distributed, optim
-from torch.nn.parallel import DistributedDataParallel
-from torch.utils.data import DataLoader, DistributedSampler
-from torchvision.utils import make_grid
+from torchvision.utils import make_grid, save_image
 from tqdm import tqdm
-from utils import accumulate, repeat
 from utils.cli import OPTIONS
-from utils.cli.stylegan import StyleGANArch, StyleGANGenerate, StyleGANTrain
-from utils.distributed import reduce_loss_dict, reduce_sum, setup_distributed
+from utils.cli.stylegan import StyleGANArch, StyleGANGenerate
 
 ARCH_OPTIONS = cast(StyleGANArch, OPTIONS.arch)
 GEN_OPTIONS = cast(StyleGANGenerate, ARCH_OPTIONS.cmd)
@@ -42,15 +32,10 @@ class Task:
         self.g_ema.load_state_dict(ckpt["g_ema"])
         self.mean_latent = self.g_ema.mean_latent(10000, "cuda")
 
+        # Make image output folders
+        (OPTIONS.output_dir / "generated").mkdir(parents=True, exist_ok=True)
+
     def generate(self):
-        wandb.init(
-            project="FYP",
-            entity="ppeetteerrs",
-            group="stylegan",
-            job_type="generate",
-            name=OPTIONS.name,
-            config=OPTIONS.to_dict(),
-        )
 
         with torch.no_grad():
             for step in tqdm(
@@ -68,18 +53,14 @@ class Task:
                     noise, trunc_option=(GEN_OPTIONS.trunc, self.mean_latent)
                 )
 
-                wandb.log(
-                    {
-                        "img": wandb.Image(
-                            make_grid(
-                                img,
-                                nrow=1,
-                                normalize=True,
-                                value_range=(-1, 1),
-                            )
-                        )
-                    },
-                    step=step,
+                save_image(
+                    make_grid(
+                        img,
+                        nrow=1,
+                        normalize=True,
+                        value_range=(-1, 1),
+                    ),
+                    (OPTIONS.output_dir / f"generated/{str(step).zfill(10)}.png"),
                 )
 
 

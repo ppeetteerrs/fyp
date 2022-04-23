@@ -42,8 +42,8 @@ class PSPTrain(Serializable):
     """Learning rate."""
     mixing: float = 0
     """Style mixing probability (currently unused)."""
-    datasets: List[str] = list_field("input/data/covid_ct_pneumonia/train")
-    """Paths to image folders."""
+    dataset: str = "input/data/covid_ct_lmdb"
+    """Paths to image LMDB dataset."""
 
     # Loss function
     l2: str = "out:soft:3"
@@ -52,7 +52,7 @@ class PSPTrain(Serializable):
     """Specs of ID (identity) loss. Format: {input1:truth1:weight1,input2:truth2:weight2}."""
     id_ckpt: str = "input/pretrained/arcface.pt"
     """ArcFace model checkpoint for ID loss."""
-    lpips: str = "out:lung:0.1"
+    lpips: str = "out:body:0.1"
     """Specs of LPIPS loss. Format: {input1:truth1:weight1,input2:truth2:weight2}."""
     reg: float = 0.01
     """Weight of regularization loss."""
@@ -87,8 +87,8 @@ class PSPGenerate(Serializable):
     pSp Generate Options
     """
 
-    datasets: List[str] = list_field()
-    """Paths to image folders."""
+    dataset: str = ""
+    """Paths to image LMDB dataset."""
 
 
 @dataclass
@@ -97,8 +97,8 @@ class PSPMix(Serializable):
     pSp Mixing Options
     """
 
-    datasets: List[str] = list_field()
-    """Paths to image folders."""
+    dataset: str = ""
+    """Paths to image LMDB dataset."""
     mix_mode: Literal["alt", "half", "mean"] = choice(
         "alt", "half", "mean", default="mean"
     )
@@ -120,12 +120,12 @@ class PSPArch(StyleGANArchOptions, Serializable):
         {"train": PSPTrain, "generate": PSPGenerate, "mix": PSPMix}, default=PSPTrain()
     )
     """Options for active command."""
-    classes: List[str] = list_field("lung", "soft")
+    classes: List[str] = list_field("body", "lung", "soft")
     """
     Image classes needed for dataset.
     (Used as `subfolders` for `MultiImageDataset`, provided as dict of Tensors.)
     """
-    inputs: List[str] = list_field("lung")
+    inputs: List[str] = list_field("body")
     """Image classes used as input."""
     use_mean: bool = True
     """Add latent average to encoded style vectors."""

@@ -1,20 +1,21 @@
 """Train pSp"""
 
 import os
+from pathlib import Path
 from typing import Dict, Tuple, Union, cast
 
 import lpips
 import torch
 import torch.nn.functional as F
 import wandb
-from dataset import MultiImageDataset
 from torch import Tensor
 from torch.utils.data import DataLoader
 from torchvision.utils import make_grid
 from tqdm import tqdm
 from utils import repeat, to_device
-from utils.cli import OPTIONS
+from utils.cli import OPTIONS, save_options
 from utils.cli.psp import PSPArch, PSPTrain
+from utils.dataset import LMDBImageDataset
 
 from psp import pSp
 from psp.loss import IDLoss, RegLoss
@@ -55,12 +56,12 @@ class Task:
         )
 
         # Initialize dataset
-        self.dataset = MultiImageDataset(
-            TRAIN_OPTIONS.datasets,
+        self.dataset = LMDBImageDataset(
+            TRAIN_OPTIONS.dataset,
             ARCH_OPTIONS.classes,
         )
-        self.samples = MultiImageDataset(
-            TRAIN_OPTIONS.datasets,
+        self.samples = LMDBImageDataset(
+            TRAIN_OPTIONS.dataset,
             ARCH_OPTIONS.classes,
             length=TRAIN_OPTIONS.sample_size,
         )
@@ -139,7 +140,9 @@ class Task:
             loss += loss_l2 * weight
 
         for img, truth, weight in TRAIN_OPTIONS.id_spec:
-            loss_id = self.id_loss(img, truth)
+            loss_id = self.id_loss(
+                imgs[img].expand(-1, 3, -1, -1), imgs[truth].expand(-1, 3, -1, -1)
+            )
             loss_dict[f"id_{img}:{truth}"] = float(loss_id)
             loss += loss_id * weight
 
@@ -226,4 +229,5 @@ class Task:
 
 
 def psp_train():
+    save_options()
     Task().train()

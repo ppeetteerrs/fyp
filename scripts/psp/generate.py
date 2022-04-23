@@ -4,15 +4,14 @@ from pathlib import Path
 from typing import Dict, Tuple, cast
 
 import torch
-import wandb
-from dataset import MultiImageDataset
 from torch import Tensor
 from torch.utils.data import DataLoader
-from torchvision.utils import make_grid
+from torchvision.utils import make_grid, save_image
 from tqdm import tqdm
-from utils import repeat, to_device
+from utils import to_device
 from utils.cli import OPTIONS
 from utils.cli.psp import PSPArch, PSPGenerate
+from utils.dataset import LMDBImageDataset
 
 from psp import pSp
 
@@ -44,30 +43,18 @@ class Task:
         ), "Please provide a checkpoint to a pretrained pSp model."
 
         # Initialize dataset
-        self.dataset = MultiImageDataset(
-            [Path(f"input/data/{item}/train") for item in GEN_OPTIONS.datasets],
+        self.dataset = LMDBImageDataset(
+            GEN_OPTIONS.dataset,
             ARCH_OPTIONS.classes,
         )
 
-        self.dataloader = repeat(
-            DataLoader(
-                self.dataset,
-                batch_size=1,
-                shuffle=False,
-                num_workers=2,
-                prefetch_factor=1,
-                drop_last=True,
-            )
-        )
-
-        # Start wandb
-        wandb.init(
-            project="FYP",
-            entity="ppeetteerrs",
-            group="psp",
-            job_type="generate",
-            name=OPTIONS.name,
-            config=OPTIONS.to_dict(),
+        self.dataloader = DataLoader(
+            self.dataset,
+            batch_size=1,
+            shuffle=False,
+            num_workers=2,
+            prefetch_factor=1,
+            drop_last=True,
         )
 
     def forward(self, imgs: Dict[str, Tensor]) -> Tuple[Dict[str, Tensor], Tensor]:
@@ -90,20 +77,20 @@ class Task:
             for idx, item in tqdm(enumerate(self.dataloader)):
                 imgs = to_device(item)
                 output_imgs, _ = self.forward(imgs)
-                wandb.log(
-                    {
-                        k: wandb.Image(
-                            make_grid(
-                                v,
-                                nrow=1,
-                                normalize=True,
-                                value_range=(-1, 1),
-                            )
-                        )
-                        for k, v in output_imgs.items()
-                    },
-                    step=idx,
-                )
+
+                for k, v in output_imgs.items():
+                    out_dir = OPTIONS.output_dir / f"generated/{k}"
+                    out_dir.mkdir(parents=True, exist_ok=True)
+
+                    save_image(
+                        make_grid(
+                            v,
+                            nrow=1,
+                            normalize=True,
+                            value_range=(-1, 1),
+                        ),
+                        (out_dir / f"{str(idx).zfill(10)}.png"),
+                    )
 
 
 def psp_generate():

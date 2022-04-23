@@ -2,6 +2,11 @@
 	"build": {
 		"dockerfile": "Dockerfile",
 		"context": ".",
+		"args": {
+			"USER_UID": "${localEnv:USER_UID}",
+			"USER_GID": "${localEnv:USER_GID}",
+			"WANDB_API_KEY": "${localEnv:WANDB_API_KEY}"
+		},
 	},
 	"runArgs": [
 		"--shm-size=1g",
@@ -12,10 +17,13 @@
 		"--ulimit",
 		"stack=67108864",
 		"--name",
-		"fyp"
+		"ct2cxr"
 	],
 	"workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind,consistency=cached",
 	"workspaceFolder": "/workspace",
+	"mounts": [
+		"source=${localEnv:CT2CXR_DATA},target=/data,readonly,type=bind,consistency=cached"
+	],
 	"extensions": [
 		"ms-python.vscode-pylance",
 		"ms-python.python",
@@ -39,4 +47,7 @@
 		],
 		"terminal.integrated.defaultProfile.linux": "zsh"
 	},
+	"features": {
+		"github-cli": "latest"
+	}
 }
