@@ -1,7 +1,7 @@
 """StyleGAN CLI Options"""
 
 from dataclasses import dataclass
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Union
 
 from simple_parsing import Serializable, list_field, subparsers
 from stylegan2_torch import Resolution
@@ -100,7 +100,7 @@ class StyleGANArch(StyleGANArchOptions, Serializable):
     StyleGAN Architecture Options
     """
 
-    cmd: StyleGANTrain = subparsers(
+    cmd: Union[StyleGANTrain, StyleGANGenerate] = subparsers(
         {"train": StyleGANTrain, "generate": StyleGANGenerate}, default=StyleGANTrain()
     )
     ckpt: Optional[str] = None

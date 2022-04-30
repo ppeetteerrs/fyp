@@ -43,8 +43,10 @@ class RegLoss(nn.Module):
 
 
 # ---------------------------------------------------------------------------- #
-#                    Ugly code taken from original pSp repo.                   #
+#        Ugly code taken from original pSp repo. Used in identity loss.        #
 # ---------------------------------------------------------------------------- #
+
+#  ID loss is discarded from final loss function but included here for experiments
 
 
 def l2_norm(input: Tensor, axis: int = 1) -> Tensor:
@@ -145,6 +147,7 @@ class IDLoss(nn.Module):
         """
         ID(entity) loss using pretrained ArcFace network.
         """
+
         super().__init__()
         self.facenet = Backbone()
         self.facenet.load_state_dict(torch.load(ckpt_path))
@@ -155,6 +158,7 @@ class IDLoss(nn.Module):
         """
         Extracts ArcFace features.
         """
+
         x = x[:, :, 35:223, 32:220]  # Crop interesting region?!
         x = self.face_pool(x)
         x_feats = self.facenet(x)

@@ -29,6 +29,7 @@ class SEModule(nn.Module):
             SEModule incorporates global information when scaling feature maps (e.g. dealing with relative means).
             [Reference](https://amaarora.github.io/2020/07/24/SeNet.html#intuition-behind-squeeze-and-excitation-networks)
         """
+
         super().__init__()
         self.se = nn.Sequential(
             # Can replace with global avg pool
@@ -82,6 +83,7 @@ class ResnetBlock(nn.Module):
         """
         One ResNet block forward propagation.
         """
+
         return self.convs(x) + self.shortcut(x)
 
 
@@ -159,6 +161,7 @@ class Encoder(nn.Module):
             resolution (Resolution): _description_
 
         """
+
         super().__init__()
 
         self.input_layer = Sequential(
@@ -190,6 +193,7 @@ class Encoder(nn.Module):
         """
         Adds `x` to `y` after bilinear upsampling.
         """
+
         _, _, H, W = y.size()
         return F.interpolate(x, size=(H, W), mode="bilinear", align_corners=True) + y
 

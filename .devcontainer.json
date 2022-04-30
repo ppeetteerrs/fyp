@@ -3,8 +3,13 @@
 		"dockerfile": "Dockerfile",
 		"context": ".",
 		"args": {
+			// For debugging
+			"SHELL": "${localEnv:SHELL}",
+			// Build image according to user UID and GID to avoid permission issues on created files
+			// Also saves plenty of time when rebuilding as VSCode does not need to recursively change file ownerships
 			"USER_UID": "${localEnv:USER_UID}",
 			"USER_GID": "${localEnv:USER_GID}",
+			// Weights and Biases authentication
 			"WANDB_API_KEY": "${localEnv:WANDB_API_KEY}"
 		},
 	},
@@ -33,7 +38,8 @@
 		"yzhang.markdown-all-in-one",
 		"christian-kohler.path-intellisense",
 		"njpwerner.autodocstring",
-		"stackbreak.comment-divider"
+		"stackbreak.comment-divider",
+		"redhat.vscode-yaml"
 	],
 	"settings": {
 		"python.analysis.typeCheckingMode": "basic",
@@ -47,7 +53,4 @@
 		],
 		"terminal.integrated.defaultProfile.linux": "zsh"
 	},
-	"features": {
-		"github-cli": "latest"
-	}
 }

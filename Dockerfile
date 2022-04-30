@@ -105,6 +105,12 @@ RUN wget -q -O - https://github.com/opencv/opencv/archive/$OPENCV_VERSION.tar.gz
 RUN pip install -U stylegan2-torch simple-parsing ipykernel mkdocs-jupyter mkdocs-material mkdocstrings-python && \
 	mamba install -y wandb
 
+RUN pip install git+https://github.com/JoHof/lungmask
+
+RUN sudo apt-get install -y libgl1-mesa-glx xvfb
+
+RUN pip install nibabel
+
 ARG WANDB_API_KEY
 ENV WANDB_API_KEY=$WANDB_API_KEY
 

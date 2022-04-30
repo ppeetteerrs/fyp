@@ -1,7 +1,7 @@
 """pSp CLI Options"""
 
 from dataclasses import dataclass
-from typing import List, Literal, Tuple
+from typing import List, Literal, Tuple, Union
 
 from simple_parsing import Serializable, choice, list_field, subparsers
 from stylegan2_torch import Resolution
@@ -116,7 +116,7 @@ class PSPArch(StyleGANArchOptions, Serializable):
     pSp Architecture Options
     """
 
-    cmd: PSPTrain = subparsers(
+    cmd: Union[PSPTrain, PSPGenerate, PSPMix] = subparsers(
         {"train": PSPTrain, "generate": PSPGenerate, "mix": PSPMix}, default=PSPTrain()
     )
     """Options for active command."""

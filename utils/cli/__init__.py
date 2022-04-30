@@ -1,6 +1,8 @@
 import os
 from pathlib import Path
 
+from utils.cli.dataset import DatasetOptions
+
 project_root = Path(__file__).parents[2].resolve()
 if Path(os.getcwd()) != project_root:
     print(f"Please run the script from {project_root}. Exiting...")
@@ -23,8 +25,8 @@ class Options(Serializable):
     Project Options
     """
 
-    arch: Union[StyleGANArch, PSPArch] = subparsers(
-        {"stylegan": StyleGANArch, "psp": PSPArch}
+    arch: Union[StyleGANArch, PSPArch, DatasetOptions] = subparsers(
+        {"stylegan": StyleGANArch, "psp": PSPArch, "dataset": DatasetOptions}
     )
 
     name: str = "default"  # Experiment name
@@ -33,6 +35,10 @@ class Options(Serializable):
     @property
     def output_dir(self) -> Path:
         return Path("output") / self.name
+
+    @property
+    def project_dir(self) -> Path:
+        return Path(__file__).parent / "../.."
 
 
 parser = ArgumentParser()
