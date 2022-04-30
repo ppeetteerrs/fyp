@@ -48,52 +48,52 @@ def gen_lidc_data():
         (OPTIONS.output_dir / "drr").mkdir(parents=True, exist_ok=True)
         writer = None
 
-    # for idx, (subject, lung_paths) in tqdm(
-    #     list(enumerate(items)), desc="Generating body, lung, bones, outer"
-    # ):
-    #     raw_sitk, raw_np = read_dcm(list(lung_paths), clip=True)
-    #     lung_mask, body_mask, bones_mask = segment(
-    #         raw_sitk, raw_np, seg_model=seg_model
-    #     )
+    for idx, (subject, lung_paths) in tqdm(
+        list(enumerate(items)), desc="Generating body, lung, bones, outer"
+    ):
+        raw_sitk, raw_np = read_dcm(list(lung_paths), clip=True)
+        lung_mask, body_mask, bones_mask = segment(
+            raw_sitk, raw_np, seg_model=seg_model
+        )
 
-    #     body_3d = raw_np * body_mask
-    #     body = project(body_3d, crop_size=GEN_OPTIONS.resolution)
-    #     lung = project(
-    #         raw_np * lung_mask,
-    #         crop_size=GEN_OPTIONS.resolution,
-    #         remove_border_ref=body_3d,
-    #     )
-    #     bones = project(
-    #         raw_np * bones_mask,
-    #         crop_size=GEN_OPTIONS.resolution,
-    #         remove_border_ref=body_3d,
-    #     )
-    #     soft = project(
-    #         raw_np * body_mask * (~bones_mask),
-    #         crop_size=GEN_OPTIONS.resolution,
-    #         remove_border_ref=body_3d,
-    #     )
-    #     outer = project(
-    #         raw_np * body_mask * (~lung_mask),
-    #         crop_size=GEN_OPTIONS.resolution,
-    #         remove_border_ref=body_3d,
-    #     )
+        body_3d = raw_np * body_mask
+        body = project(body_3d, crop_size=GEN_OPTIONS.resolution)
+        lung = project(
+            raw_np * lung_mask,
+            crop_size=GEN_OPTIONS.resolution,
+            remove_border_ref=body_3d,
+        )
+        bones = project(
+            raw_np * bones_mask,
+            crop_size=GEN_OPTIONS.resolution,
+            remove_border_ref=body_3d,
+        )
+        soft = project(
+            raw_np * body_mask * (~bones_mask),
+            crop_size=GEN_OPTIONS.resolution,
+            remove_border_ref=body_3d,
+        )
+        outer = project(
+            raw_np * body_mask * (~lung_mask),
+            crop_size=GEN_OPTIONS.resolution,
+            remove_border_ref=body_3d,
+        )
 
-    #     # Save images to different places
-    #     if not GEN_OPTIONS.png:
-    #         assert writer is not None
-    #         writer.set_meta((idx, "subject"), subject)
-    #         writer.set_img((idx, "body"), body)
-    #         writer.set_img((idx, "lung"), lung)
-    #         writer.set_img((idx, "bones"), bones)
-    #         writer.set_img((idx, "soft"), soft)
-    #         writer.set_img((idx, "outer"), outer)
-    #     else:
-    #         save_img(body, OPTIONS.output_dir / f"body/{str(idx).zfill(10)}.png")
-    #         save_img(lung, OPTIONS.output_dir / f"lung/{str(idx).zfill(10)}.png")
-    #         save_img(bones, OPTIONS.output_dir / f"bones/{str(idx).zfill(10)}.png")
-    #         save_img(soft, OPTIONS.output_dir / f"soft/{str(idx).zfill(10)}.png")
-    #         save_img(outer, OPTIONS.output_dir / f"outer/{str(idx).zfill(10)}.png")
+        # Save images to different places
+        if not GEN_OPTIONS.png:
+            assert writer is not None
+            writer.set_meta((idx, "subject"), subject)
+            writer.set_img((idx, "body"), body)
+            writer.set_img((idx, "lung"), lung)
+            writer.set_img((idx, "bones"), bones)
+            writer.set_img((idx, "soft"), soft)
+            writer.set_img((idx, "outer"), outer)
+        else:
+            save_img(body, OPTIONS.output_dir / f"body/{str(idx).zfill(10)}.png")
+            save_img(lung, OPTIONS.output_dir / f"lung/{str(idx).zfill(10)}.png")
+            save_img(bones, OPTIONS.output_dir / f"bones/{str(idx).zfill(10)}.png")
+            save_img(soft, OPTIONS.output_dir / f"soft/{str(idx).zfill(10)}.png")
+            save_img(outer, OPTIONS.output_dir / f"outer/{str(idx).zfill(10)}.png")
 
     for idx, (subject, lung_paths) in tqdm(
         list(enumerate(items)), desc="Generating drr"
