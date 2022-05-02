@@ -2,102 +2,102 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
     <url>
          <loc>https://ppeetteerrs.github.io/fyp/</loc>
-         <lastmod>2022-04-30</lastmod>
-         <changefreq>daily</changefreq>
-    </url>
-    <url>
-         <loc>https://ppeetteerrs.github.io/fyp/cmds/</loc>
-         <lastmod>2022-04-30</lastmod>
+         <lastmod>2022-05-02</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://ppeetteerrs.github.io/fyp/psp/</loc>
-         <lastmod>2022-04-30</lastmod>
+         <lastmod>2022-05-02</lastmod>
+         <changefreq>daily</changefreq>
+    </url>
+    <url>
+         <loc>https://ppeetteerrs.github.io/fyp/results/</loc>
+         <lastmod>2022-05-02</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://ppeetteerrs.github.io/fyp/scripts/</loc>
-         <lastmod>2022-04-30</lastmod>
+         <lastmod>2022-05-02</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://ppeetteerrs.github.io/fyp/setup/</loc>
-         <lastmod>2022-04-30</lastmod>
+         <lastmod>2022-05-02</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://ppeetteerrs.github.io/fyp/utils/</loc>
-         <lastmod>2022-04-30</lastmod>
+         <lastmod>2022-05-02</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://ppeetteerrs.github.io/fyp/notebooks/folder_structure/</loc>
-         <lastmod>2022-04-30</lastmod>
+         <lastmod>2022-05-02</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://ppeetteerrs.github.io/fyp/notebooks/brixia/generate_dataset/</loc>
-         <lastmod>2022-04-30</lastmod>
+         <lastmod>2022-05-02</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://ppeetteerrs.github.io/fyp/notebooks/brixia/generate_drr/</loc>
-         <lastmod>2022-04-30</lastmod>
+         <lastmod>2022-05-02</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://ppeetteerrs.github.io/fyp/notebooks/brixia/view_lmdb/</loc>
-         <lastmod>2022-04-30</lastmod>
+         <lastmod>2022-05-02</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://ppeetteerrs.github.io/fyp/notebooks/chexpert/view_lmdb/</loc>
-         <lastmod>2022-04-30</lastmod>
+         <lastmod>2022-05-02</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://ppeetteerrs.github.io/fyp/notebooks/covid_ct/generate_dataset/</loc>
-         <lastmod>2022-04-30</lastmod>
+         <lastmod>2022-05-02</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://ppeetteerrs.github.io/fyp/notebooks/covid_ct/generate_drr/</loc>
-         <lastmod>2022-04-30</lastmod>
+         <lastmod>2022-05-02</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://ppeetteerrs.github.io/fyp/notebooks/covid_ct/metadata/</loc>
-         <lastmod>2022-04-30</lastmod>
+         <lastmod>2022-05-02</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://ppeetteerrs.github.io/fyp/notebooks/covid_ct/view_lmdb/</loc>
-         <lastmod>2022-04-30</lastmod>
-         <changefreq>daily</changefreq>
-    </url>
-    <url>
-         <loc>https://ppeetteerrs.github.io/fyp/notebooks/lesions/study/</loc>
-         <lastmod>2022-04-30</lastmod>
+         <lastmod>2022-05-02</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://ppeetteerrs.github.io/fyp/notebooks/lidc/generate_dataset/</loc>
-         <lastmod>2022-04-30</lastmod>
+         <lastmod>2022-05-02</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://ppeetteerrs.github.io/fyp/notebooks/lidc/generate_drr/</loc>
-         <lastmod>2022-04-30</lastmod>
+         <lastmod>2022-05-02</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://ppeetteerrs.github.io/fyp/notebooks/lidc/metadata/</loc>
-         <lastmod>2022-04-30</lastmod>
+         <lastmod>2022-05-02</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://ppeetteerrs.github.io/fyp/notebooks/lidc/view_lmdb/</loc>
-         <lastmod>2022-04-30</lastmod>
+         <lastmod>2022-05-02</lastmod>
+         <changefreq>daily</changefreq>
+    </url>
+    <url>
+         <loc>https://ppeetteerrs.github.io/fyp/notebooks/paper/small_lesion/</loc>
+         <lastmod>2022-05-02</lastmod>
          <changefreq>daily</changefreq>
     </url>
 </urlset>
