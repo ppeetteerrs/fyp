@@ -38,8 +38,8 @@ def parse_covid_ct_meta():
     # Remove bad (blurry / movement artifacts) and negative subjects
     df = df[
         (~df["Subject"].isin(subject_info["bad"]))
-        & (df["Subject"].isin(subject_info["positive"]))
-    ]
+        & (~df["Subject"].isin(subject_info["positive"]))
+    ].copy(deep=True)
 
     # Classify CTs into lung vs med vs localizer Types
     df = classify_images(df)

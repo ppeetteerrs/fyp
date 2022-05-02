@@ -105,7 +105,7 @@ RUN wget -q -O - https://github.com/opencv/opencv/archive/$OPENCV_VERSION.tar.gz
 RUN pip install -U stylegan2-torch simple-parsing ipykernel mkdocs-jupyter mkdocs-material mkdocstrings-python && \
 	mamba install -y wandb
 
-RUN pip install nibabel git+https://github.com/JoHof/lungmask
+RUN pip install git+https://github.com/JoHof/lungmask
 
 RUN sudo apt-get install -y libgl1-mesa-glx xvfb
 

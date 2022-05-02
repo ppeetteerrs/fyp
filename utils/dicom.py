@@ -15,7 +15,7 @@ from pydicom.multival import MultiValue
 from pydicom.valuerep import IS, DSdecimal, DSfloat
 from tqdm.contrib.concurrent import process_map
 
-from utils import Arr32F
+from utils import Arr32F, ArrB
 
 unhashable: Dict[str, None] = {}
 
@@ -300,3 +300,49 @@ def read_dcm(
     np_img = np.true_divide(np_img + 1024, 4095).astype(np.float32)
 
     return image, np_img
+
+
+def read_seg_mask(
+    path: str,
+    spacing: Optional[Tuple[int, int, int]] = (1, 1, 1),
+    reverse_z: bool = True,
+) -> ArrB:
+    """
+    Reads a NIFTI segmentation mask.
+
+    Args:
+        path (str): Path to `.nii` or `.nii.gz` file.
+        spacing (Optional[Tuple[int, int, int]], optional): Pixel spacing in mm. Defaults to (1, 1, 1).
+        reverse_z (bool, optional): Reverse z-axis index. Defaults to True.
+
+    Returns:
+        ArrB: Numpy binary segmentation mask.
+    """
+
+    # Read image using sitk
+    image = sitk.ReadImage(path)
+
+    # Resample image to new pixel spacing
+    if spacing is not None:
+        original_size = image.GetSize()
+        original_spacing = image.GetSpacing()
+        new_size = [
+            int(i * j / k) for i, j, k in zip(original_size, original_spacing, spacing)
+        ]
+        image = sitk.Resample(
+            image1=image,
+            size=new_size,
+            transform=sitk.Transform(),
+            interpolator=sitk.sitkLinear,
+            outputOrigin=image.GetOrigin(),
+            outputSpacing=spacing,
+            outputDirection=image.GetDirection(),
+            defaultPixelValue=0,
+            outputPixelType=image.GetPixelID(),
+        )
+    np_img = sitk.GetArrayFromImage(image).astype(np.bool8)
+
+    if reverse_z:
+        np_img = np_img[::-1, :, :]
+
+    return np_img

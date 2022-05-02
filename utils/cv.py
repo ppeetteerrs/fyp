@@ -2,7 +2,7 @@
 Computer Vision functions.
 """
 
-from typing import Collection, List, Optional, Tuple, Union
+from typing import Collection, List, Optional, Tuple, TypeVar, Union, cast
 
 import cv2 as cv
 import numpy as np
@@ -139,3 +139,33 @@ def project(
         img_2d = min_max_normalize(img_2d)
 
     return img_2d
+
+
+T1 = TypeVar("T1", bound=np.ndarray)
+T2 = TypeVar("T2", bound=np.ndarray)
+
+
+def align_shape(img1: T1, img2: T2) -> Tuple[T1, T2]:
+    out_shape = tuple(max(dim1, dim2) for dim1, dim2 in zip(img1.shape, img2.shape))
+
+    out1 = cast(T1, np.zeros_like(img1, shape=out_shape))
+    offsets1 = tuple(
+        (out_dim - in_dim) // 2 for in_dim, out_dim in zip(img1.shape, out_shape)
+    )
+    out1[
+        offsets1[0] : offsets1[0] + img1.shape[0],
+        offsets1[1] : offsets1[1] + img1.shape[1],
+        offsets1[2] : offsets1[2] + img1.shape[2],
+    ] = img1
+
+    out2 = cast(T2, np.zeros_like(img2, shape=out_shape))
+    offsets2 = tuple(
+        (out_dim - in_dim) // 2 for in_dim, out_dim in zip(img2.shape, out_shape)
+    )
+    out2[
+        offsets2[0] : offsets2[0] + img2.shape[0],
+        offsets2[1] : offsets2[1] + img2.shape[1],
+        offsets2[2] : offsets2[2] + img2.shape[2],
+    ] = img2
+
+    return out1, out2

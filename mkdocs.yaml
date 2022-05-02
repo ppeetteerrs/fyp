@@ -69,19 +69,21 @@ markdown_extensions:
 nav:
         - Home: index.md
         - Setup: setup.md
-        - Results: results.md
-        # - Examples:
-        #           - Dataset:
-        #                     - Covid-CT:
-        #                               - Parsed Metadata: notebooks/covid_ct/metadata.ipynb
-        #                               - Data Generation Process: notebooks/covid_ct/generate_dataset.ipynb
-        #                               - Generated LMDB Data: notebooks/covid_ct/view_lmdb.ipynb
-        #                               - DeepDRR Generation: notebooks/covid_ct/generate_drr.ipynb
-        #                     - LIDC:
-        #                               - Parsed Metadata: notebooks/lidc/metadata.ipynb
-        #                               - Data Generation Process: notebooks/lidc/generate_dataset.ipynb
-        #                               - Generated LMDB Data: notebooks/lidc/view_lmdb.ipynb
-        #                               - DeepDRR Generation: notebooks/lidc/generate_drr.ipynb
+        - Results:
+                  - Training Results: results.md
+                  - Small Lesion Results: notebooks/paper/small_lesion.ipynb
+        - Examples:
+                  - Dataset:
+                            - Covid-CT:
+                                      - Parsed Metadata: notebooks/covid_ct/metadata.ipynb
+                                      - Data Generation Process: notebooks/covid_ct/generate_dataset.ipynb
+                                      - Generated LMDB Data: notebooks/covid_ct/view_lmdb.ipynb
+                                      - DeepDRR Generation: notebooks/covid_ct/generate_drr.ipynb
+                            - LIDC:
+                                      - Parsed Metadata: notebooks/lidc/metadata.ipynb
+                                      - Data Generation Process: notebooks/lidc/generate_dataset.ipynb
+                                      - Generated LMDB Data: notebooks/lidc/view_lmdb.ipynb
+                                      - DeepDRR Generation: notebooks/lidc/generate_drr.ipynb
         - API Reference:
                   - utils: utils.md
                   - psp: psp.md

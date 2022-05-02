@@ -66,6 +66,7 @@ def plot_volume(
     axis: int = 0,
     value_range: Optional[Tuple[int, int]] = None,
     size: int = 8,
+    initial_val: int = 0,
 ):
     """
     Plots a 3D image using a series of 2D image with a slider.
@@ -76,6 +77,7 @@ def plot_volume(
         axis (int, optional): Image axis represented by slider. Defaults to 0.
         value_range (Optional[Tuple[int, int]], optional): Value range of image. Defaults to (img.min, img.max).
         size (int, optional): Figure size. Defaults to 8.
+        initial_val (int, optional): Initial slice index. Defaults to 0.
     """
 
     if mask is not None:
@@ -93,7 +95,7 @@ def plot_volume(
         value_range = (img.min(), img.max())
 
     # Set figure size
-    first_slice = img.take(0, axis=axis)
+    first_slice = img.take(initial_val, axis=axis)
     rows, cols = first_slice.shape
     fig, ax = plt.subplots(1, 1, figsize=(size, int(size / cols * rows)))
 
@@ -111,7 +113,7 @@ def plot_volume(
     )
 
     if mask is not None:
-        curr_mask = mask.take(0, axis=axis)
+        curr_mask = mask.take(initial_val, axis=axis)
         mask_ax = ax.imshow(
             curr_mask,
             cmap="rainbow",
@@ -129,4 +131,4 @@ def plot_volume(
             mask_ax.set_alpha((curr_mask > 0) * 0.3)
         fig.canvas.draw_idle()
 
-    interact(update, val=IntSlider(min=0, max=img.shape[axis] - 1, value=1))
+    interact(update, val=IntSlider(min=0, max=img.shape[axis] - 1, value=initial_val))

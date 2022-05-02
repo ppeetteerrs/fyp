@@ -1,6 +1,5 @@
 """Generate pSp"""
 
-from pathlib import Path
 from typing import Dict, Tuple, cast
 
 import torch

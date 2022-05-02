@@ -77,6 +77,7 @@ class pSp(nn.Module):
         input: Union[Tensor, Tuple[Tensor, Tensor]],
         task: Literal["encode"],
         mix_mode: Literal["alt", "half", "mean"] = "mean",
+        disable_noise: bool = False,
     ) -> Tensor:
         pass
 
@@ -86,6 +87,7 @@ class pSp(nn.Module):
         input: Union[Tensor, Tuple[Tensor, Tensor]],
         task: Literal["generate"],
         mix_mode: Literal["alt", "half", "mean"] = "mean",
+        disable_noise: bool = False,
     ) -> Tuple[Tensor, Tensor]:
         pass
 
@@ -94,6 +96,7 @@ class pSp(nn.Module):
         input: Union[Tensor, Tuple[Tensor, Tensor]],
         task: Literal["encode", "generate"] = "generate",
         mix_mode: Literal["alt", "half", "mean"] = "mean",
+        disable_noise: bool = False,
     ) -> Union[Tensor, Tuple[Tensor, Tensor]]:
         """
         Performs forward propagation. Task can be encode or generate.
@@ -108,6 +111,7 @@ class pSp(nn.Module):
             input (Union[Tensor, Tuple[Tensor, Tensor]]): Input image(s).
             task (Literal["encode", "generate"], optional): pSp forward task.
             mix_mode (Literal["alt", "half", "mean"], optional): Mixing mode if input contains 2 images.
+            disable_noise (bool, optional): Disable noise in StyleGAN.
 
         Raises:
             NotImplementedError: _description_
@@ -132,8 +136,12 @@ class pSp(nn.Module):
         if task == "encode":
             return codes
         elif task == "generate":
+            if disable_noise:
+                noises = [0] * self.decoder.n_w_plus
+            else:
+                noises = None
             imgs = self.decoder(
-                [codes], return_latents=False, input_type="w_plus", noises=None
+                [codes], return_latents=False, input_type="w_plus", noises=noises
             )
         else:
             raise NotImplementedError(f"pSp task {task} not implemented.")
