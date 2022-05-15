@@ -140,3 +140,5 @@ bk
 .wandb_key
 wandb
 docs/index.md
+
+tb_logs

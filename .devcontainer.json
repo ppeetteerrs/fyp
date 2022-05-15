@@ -3,18 +3,14 @@
 		"dockerfile": "Dockerfile",
 		"context": ".",
 		"args": {
-			// For debugging
-			"SHELL": "${localEnv:SHELL}",
 			// Build image according to user UID and GID to avoid permission issues on created files
 			// Also saves plenty of time when rebuilding as VSCode does not need to recursively change file ownerships
 			"USER_UID": "${localEnv:USER_UID}",
 			"USER_GID": "${localEnv:USER_GID}",
-			// Weights and Biases authentication
-			"WANDB_API_KEY": "${localEnv:WANDB_API_KEY}"
 		},
 	},
 	"runArgs": [
-		"--shm-size=1g",
+		"--shm-size=8g",
 		"--gpus",
 		"all",
 		"--ulimit",
@@ -24,8 +20,10 @@
 		"--name",
 		"ct2cxr"
 	],
+	// Custom workspace mount location to avoid issues due to different folder names on different machines
 	"workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind,consistency=cached",
 	"workspaceFolder": "/workspace",
+	// Dynamically bind data folder
 	"mounts": [
 		"source=${localEnv:CT2CXR_DATA},target=/data,readonly,type=bind,consistency=cached"
 	],
@@ -39,18 +37,20 @@
 		"christian-kohler.path-intellisense",
 		"njpwerner.autodocstring",
 		"stackbreak.comment-divider",
-		"redhat.vscode-yaml"
+		"redhat.vscode-yaml",
+		"ms-python.black-formatter",
+		"ms-python.isort"
 	],
 	"settings": {
 		"python.analysis.typeCheckingMode": "basic",
 		"python.analysis.diagnosticSeverityOverrides": {
 			"reportPrivateImportUsage": "none"
 		},
-		"python.sortImports.path": "/home/user/mambaforge/envs/user/bin/isort",
 		"python.linting.flake8Args": [
 			"--ignore=E402,E203,W503",
 			"--max-line-length=120"
 		],
 		"terminal.integrated.defaultProfile.linux": "zsh"
 	},
+	"userEnvProbe": "loginInteractiveShell"
 }

@@ -42,20 +42,22 @@ class PSPTrain(Serializable):
     """Learning rate."""
     mixing: float = 0
     """Style mixing probability (currently unused)."""
-    dataset: str = "input/data/covid_ct_lmdb"
+    dataset: str = "output/covid_ct/lmdb"
     """Paths to image LMDB dataset."""
 
     # Loss function
-    l2: str = "out:soft:3"
+    l2: str = "out:body:1"
     """Specs of l2 pixel-wise loss. Format: {input1:truth1:weight1,input2:truth2:weight2}."""
-    id: str = ""
+    id: str = "out:body:0.1"
     """Specs of ID (identity) loss. Format: {input1:truth1:weight1,input2:truth2:weight2}."""
     id_ckpt: str = "input/pretrained/arcface.pt"
     """ArcFace model checkpoint for ID loss."""
-    lpips: str = "out:body:0.1"
+    lpips: str = "out:body:0.8"
     """Specs of LPIPS loss. Format: {input1:truth1:weight1,input2:truth2:weight2}."""
     reg: float = 0.01
     """Weight of regularization loss."""
+    l1: str = ""
+    """Specs of masked l1 pixel-wise loss. Format: {input1:truth1:weight1,input2:truth2:weight2}."""
 
     # Logging
     sample_size: int = 4
@@ -79,6 +81,11 @@ class PSPTrain(Serializable):
     def lpips_spec(self) -> LossSpec:
         """Parses `self.lpips` into list of (input, truth, weight) tuples."""
         return decode_loss_spec(self.lpips)
+
+    @property
+    def l1_spec(self) -> LossSpec:
+        """Parses `self.l2` into list of (input, truth, weight) tuples."""
+        return decode_loss_spec(self.l1)
 
 
 @dataclass
@@ -131,5 +138,5 @@ class PSPArch(StyleGANArchOptions, Serializable):
     """Add latent average to encoded style vectors."""
     input_resolution: Resolution = 256
     """Input image resolution."""
-    ckpt: str = "stylegan.pt"
+    ckpt: str = "input/pretrained/stylegan.pt"
     """Path to pretrained StyleGAN / pSp."""

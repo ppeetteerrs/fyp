@@ -3,7 +3,6 @@ from os import environ
 from typing import cast
 
 import torch
-import wandb
 from stylegan2_torch import Generator
 from stylegan2_torch.utils import mixing_noise
 from torchvision.utils import make_grid, save_image
@@ -30,7 +29,10 @@ class Task:
         # Load checkpoint
         ckpt = torch.load(ARCH_OPTIONS.ckpt)
         self.g_ema.load_state_dict(ckpt["g_ema"])
-        self.mean_latent = self.g_ema.mean_latent(10000, "cuda")
+        if "latent_avg" in ckpt:
+            self.mean_latent = ckpt["latent_avg"].to("cuda")
+        else:
+            self.mean_latent = self.g_ema.mean_latent(10000, "cuda")
 
         # Make image output folders
         (OPTIONS.output_dir / "generated").mkdir(parents=True, exist_ok=True)

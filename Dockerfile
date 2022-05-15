@@ -55,7 +55,7 @@ SHELL ["conda", "run", "-n", "user", "/bin/bash", "-c"]
 
 # Linters and Formatters
 RUN mamba install -n base -y autoflake && \
-	mamba install -y black flake8 isort tqdm jupyter notebook rich numpy=1.21.5 scipy matplotlib pandas seaborn && \
+	mamba install -y flake8 tqdm jupyter notebook rich numpy=1.21.5 scipy matplotlib pandas seaborn && \
 	pip install ipympl && \
 	mamba install -y tensorboard python-dotenv python-lmdb pycuda scikit-learn && \
 	mamba install -y -c simpleitk simpleitk && \
@@ -102,14 +102,8 @@ RUN wget -q -O - https://github.com/opencv/opencv/archive/$OPENCV_VERSION.tar.gz
 	sudo apt-get update -y && \
     sudo apt-get install -y libgl1 libxrender1
 
-RUN pip install -U stylegan2-torch simple-parsing ipykernel mkdocs-jupyter mkdocs-material mkdocstrings-python && \
-	mamba install -y wandb
-
-RUN pip install git+https://github.com/JoHof/lungmask
+RUN pip install -U stylegan2-torch simple-parsing ipykernel mkdocs-jupyter mkdocs-material mkdocstrings-python torch_fidelity git+https://github.com/JoHof/lungmask
 
 RUN sudo apt-get install -y libgl1-mesa-glx xvfb
-
-ARG WANDB_API_KEY
-ENV WANDB_API_KEY=$WANDB_API_KEY
 
 CMD "zsh"

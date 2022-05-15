@@ -74,11 +74,8 @@ class CheXpertImg:
 
     def proc_img(self, size: int, base_dir: Path) -> np.ndarray:
         img = remove_border(self.img(base_dir))
-        img = crop(img, size=size)
-
-        if np.mean(img) < 50:
-            print(img, "has low brightness")
-        return img
+        img = crop(img, size=size).astype(np.float32)
+        return img / 255
 
     @classmethod
     def from_str(cls, string: str) -> "CheXpertImg":

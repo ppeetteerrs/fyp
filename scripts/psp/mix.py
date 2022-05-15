@@ -1,10 +1,8 @@
 """Mix pSp"""
 
-from pathlib import Path
 from typing import Dict, Tuple, cast
 
 import torch
-import wandb
 from torch import Tensor
 from torch.utils.data import DataLoader
 from torchvision.utils import make_grid, save_image

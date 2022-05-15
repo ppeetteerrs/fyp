@@ -1,15 +1,14 @@
 """Train pSp"""
 
 import os
-from pathlib import Path
 from typing import Dict, Tuple, Union, cast
 
 import lpips
 import torch
 import torch.nn.functional as F
-import wandb
 from torch import Tensor
 from torch.utils.data import DataLoader
+from torch.utils.tensorboard import SummaryWriter
 from torchvision.utils import make_grid
 from tqdm import tqdm
 from utils import repeat, to_device
@@ -99,15 +98,9 @@ class Task:
         else:
             self.start_iter = 0
 
-        # Start wandb
-        wandb.init(
-            project="FYP",
-            entity="ppeetteerrs",
-            group="psp",
-            job_type="train",
-            name=OPTIONS.name,
-            config=OPTIONS.to_dict(),
-        )
+        # Start Tensorboard
+        self.writer = SummaryWriter(f"tb_logs/{OPTIONS.name}")
+        self.writer.add_text("Options", f"```yaml\n{OPTIONS.dumps_yaml()}\n```")
 
     def forward(self, imgs: Dict[str, Tensor]) -> Tuple[Dict[str, Tensor], Tensor]:
         """
@@ -159,6 +152,15 @@ class Task:
             loss_dict[f"lpips_{img}:{truth}"] = float(loss_lpips)
             loss += loss_lpips * weight
 
+        for img, truth, weight in TRAIN_OPTIONS.l1_spec:
+            truth_mask = imgs[truth] > imgs[truth].min()
+            loss_l1 = F.l1_loss(
+                imgs[img] * truth_mask,
+                imgs[truth] * truth_mask,
+            )
+            loss_dict[f"l1_{img}:{truth}"] = float(loss_l1)
+            loss += loss_l1 * weight
+
         # Accumulate loss
         loss_dict["loss"] = float(loss)
 
@@ -193,25 +195,23 @@ class Task:
             self.optimizer.step()
 
             # Logging
-            wandb.log(loss_dict, step=step)
+            for k, v in loss_dict.items():
+                self.writer.add_scalar(k, v, step)
 
             if step % TRAIN_OPTIONS.sample_interval == 0:
                 sample_imgs, _ = self.forward(to_device(next(self.sample_loader)))
                 key = "_".join(sample_imgs.keys())
                 img = torch.cat(list(sample_imgs.values()), dim=3)
 
-                wandb.log(
-                    {
-                        key: wandb.Image(
-                            make_grid(
-                                img,
-                                nrow=1,
-                                normalize=True,
-                                value_range=(-1, 1),
-                            )
-                        )
-                    },
-                    step=step,
+                self.writer.add_image(
+                    key,
+                    make_grid(
+                        img,
+                        nrow=1,
+                        normalize=True,
+                        value_range=(-1, 1),
+                    ),
+                    step,
                 )
 
             # Validation related

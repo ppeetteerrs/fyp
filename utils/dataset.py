@@ -238,3 +238,48 @@ class LMDBImageDataset(Dataset[int]):
             }
         else:
             return self.transform(self.lmdb.get_img(idx))
+
+
+class LMDBImageDataset2(Dataset[int]):
+    def __init__(
+        self,
+        path: Union[str, Path],
+        names: List[str] = [],
+        length: Optional[int] = None,
+        transform: transforms.Compose = transform,
+    ):
+        """
+        An LMDB image dataset. Each integer index contains multiple images (given by `names`).
+        E.g. dataset[i] returns a dictionary with keys `names`. Each value is an image Tensor.
+        If `names` is empty, dataset[i] returns a single Tensor.
+
+        `length` truncates the dataset to specified length. Useful for getting a constant subset as samples.
+        Supporting (deterministic) shuffle before length truncation is a trivial task, implement if necessary.
+
+        `transform` is applied to each image before conversion into a PyTorch Tensor.
+        """
+
+        self.lmdb = LMDBImageReader(path)
+        self.transform = transform
+        self.names = names
+        self.length = self.lmdb.get_int("length") if length is None else length
+
+    def __len__(self) -> int:
+        """
+        Dataset length.
+        """
+
+        return self.length
+
+    def __getitem__(self, idx: int) -> Union[Dict[str, Tensor], Tensor]:
+        """
+        Gets dataset item. Returns an image Tensor or dictionary of image Tensors.
+        """
+
+        if len(self.names) > 0:
+            return {
+                name: self.transform(self.lmdb.get_img((idx, name)))
+                for name in self.names
+            }
+        else:
+            return self.transform(self.lmdb.get_img(idx))

@@ -69,6 +69,13 @@ python run.py --name lung_reg_lpips_a psp --ckpt input/pretrained/stylegan.pt tr
 python run.py --name soft_reg_lpips_b psp --ckpt input/pretrained/stylegan.pt train --dataset output/covid_ct/lmdb --l2 out:soft:0.5 --id "" --lpips out:body:0.5 --reg 0.05
 python run.py --name lung_reg_lpips_b psp --ckpt input/pretrained/stylegan.pt train --dataset output/covid_ct/lmdb --l2 out:lung:0.5 --id "" --lpips out:body:0.5 --reg 0.05
 
+RUN 1b
+
+python run.py --name soft_reg_lpips_c psp --ckpt input/pretrained/stylegan.pt train --dataset output/covid_ct/lmdb --l2 out:soft:1 --id "" --lpips out:body:0.1 --reg 0.01
+python run.py --name soft_body_reg_lpips_c psp --ckpt input/pretrained/stylegan.pt train --dataset output/covid_ct/lmdb --l2 out:soft:1,out:body:0.5 --id "" --lpips out:body:0.1 --reg 0.01
+python run.py --name lung_reg_lpips_c psp --ckpt input/pretrained/stylegan.pt train --dataset output/covid_ct/lmdb --l2 out:lung:1 --id "" --lpips out:body:0.1 --reg 0.01
+python run.py --name lung_body_reg_lpips_c psp --ckpt input/pretrained/stylegan.pt train --dataset output/covid_ct/lmdb --l2 out:lung:1,out:body:0.5 --id "" --lpips out:body:0.1 --reg 0.01
+
 RUN 2
 
 python run.py --name soft_reg psp --ckpt input/pretrained/stylegan.pt train --dataset output/covid_ct/lmdb --l2 out:soft:1 --id "" --lpips "" --reg 0.01
@@ -87,3 +94,9 @@ RUN 4
 
 python run.py --name body_reg_lpips psp --ckpt input/pretrained/stylegan.pt train --dataset output/covid_ct/lmdb --l2 out:body:1 --id "" --lpips out:body:0.1 --reg 0.01
 python run.py --name body_reg_lpips_id psp --ckpt input/pretrained/stylegan.pt train --dataset output/covid_ct/lmdb --l2 out:body:1 --id out:body:0.3 --lpips out:body:0.1 --reg 0.01
+
+
+- without noise
+- with / without truth mask for L2
+- L1 loss
+- mixing

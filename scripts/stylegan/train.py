@@ -1,5 +1,4 @@
 """Train StyleGAN"""
-from os import environ
 from typing import cast
 
 import torch
@@ -11,9 +10,9 @@ from stylegan2_torch.loss import g_loss as get_g_loss
 from stylegan2_torch.loss import g_reg_loss as get_g_reg_loss
 from stylegan2_torch.utils import mixing_noise
 from torch import distributed, optim
-from torch.backends.cudnn import benchmark
 from torch.nn.parallel import DistributedDataParallel
 from torch.utils.data import DataLoader, DistributedSampler
+from torch.utils.tensorboard import SummaryWriter
 from torchvision.utils import make_grid
 from tqdm import tqdm
 from utils import accumulate, repeat
@@ -51,12 +50,12 @@ class Task:
         self.g_optim = optim.Adam(
             generator.parameters(),
             lr=TRAIN_OPTIONS.lr * g_reg_ratio,
-            betas=(0, 0.99 ** g_reg_ratio),
+            betas=(0, 0.99**g_reg_ratio),
         )
         self.d_optim = optim.Adam(
             discriminator.parameters(),
             lr=TRAIN_OPTIONS.lr * d_reg_ratio,
-            betas=(0, 0.99 ** d_reg_ratio),
+            betas=(0, 0.99**d_reg_ratio),
         )
 
         # Load checkpoint
@@ -129,14 +128,8 @@ class Task:
                 dynamic_ncols=True,
                 smoothing=0.01,
             )
-            wandb.init(
-                project="FYP",
-                entity="ppeetteerrs",
-                group="stylegan",
-                job_type="train",
-                name=OPTIONS.name,
-                config=OPTIONS.to_dict(),
-            )
+            self.writer = SummaryWriter(f"tb_logs/{OPTIONS.name}")
+            self.writer.add_text("Options", f"```yaml\n{OPTIONS.dumps_yaml()}\n```")
         else:
             pbar = range(self.start_iter, TRAIN_OPTIONS.iterations + 1)
 
@@ -252,35 +245,39 @@ class Task:
             loss_reduced = reduce_loss_dict(loss_dict)
 
             if isinstance(pbar, tqdm):
-                wandb.log(
-                    {
-                        "d_loss": loss_reduced["d_loss"].mean().item(),
-                        "g_loss": loss_reduced["g_loss"].mean().item(),
-                        "d_reg_loss": loss_reduced["d_reg_loss"].mean().item(),
-                        "g_reg_loss": loss_reduced["g_reg_loss"].mean().item(),
-                        "real_score": loss_reduced["real_score"].mean().item(),
-                        "fake_score": loss_reduced["fake_score"].mean().item(),
-                        "mean_path": mean_path_length_avg,
-                    },
-                    step=step,
+                self.writer.add_scalar(
+                    "d_loss", loss_reduced["d_loss"].mean().item(), step
                 )
+                self.writer.add_scalar(
+                    "g_loss", loss_reduced["g_loss"].mean().item(), step
+                )
+                self.writer.add_scalar(
+                    "d_reg_loss", loss_reduced["d_reg_loss"].mean().item(), step
+                )
+                self.writer.add_scalar(
+                    "g_reg_loss", loss_reduced["g_reg_loss"].mean().item(), step
+                )
+                self.writer.add_scalar(
+                    "real_score", loss_reduced["real_score"].mean().item(), step
+                )
+                self.writer.add_scalar(
+                    "fake_score", loss_reduced["fake_score"].mean().item(), step
+                )
+                self.writer.add_scalar("mean_path", mean_path_length_avg, step)
 
                 if step % TRAIN_OPTIONS.sample_interval == 0:
                     with torch.no_grad():
                         self.g_ema.eval()
                         sample = self.g_ema([self.sample_z])
-                        wandb.log(
-                            {
-                                "sample": wandb.Image(
-                                    make_grid(
-                                        sample,
-                                        nrow=int(TRAIN_OPTIONS.sample_size ** 0.5),
-                                        normalize=True,
-                                        value_range=(-1, 1),
-                                    )
-                                )
-                            },
-                            step=step,
+                        self.writer.add_image(
+                            "sample",
+                            make_grid(
+                                sample,
+                                nrow=int(TRAIN_OPTIONS.sample_size**0.5),
+                                normalize=True,
+                                value_range=(-1, 1),
+                            ),
+                            step,
                         )
 
                 if step % TRAIN_OPTIONS.ckpt_interval == 0:
