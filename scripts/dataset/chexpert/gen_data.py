@@ -25,7 +25,7 @@ def proc_img(
     img_dir: Path,
     img: CheXpertImg,
 ) -> Tuple[CheXpertImg, np.ndarray]:
-    return img, img.proc_img(GEN_OPTIONS.resolution, img_dir)
+    return img, img.proc_img(GEN_OPTIONS.resolution, img_dir, GEN_OPTIONS.equalize)
 
 
 def proc_df(df: pd.DataFrame, img_dir: Path, lmdb_dir: Path):
@@ -44,7 +44,9 @@ def proc_df(df: pd.DataFrame, img_dir: Path, lmdb_dir: Path):
 
         with Pool(4) as pool:
             for img, val in tqdm(
-                pool.imap_unordered(partial(proc_img, img_dir), imgs),
+                pool.imap_unordered(
+                    partial(proc_img, img_dir), imgs
+                ),
                 total=len(imgs),
                 dynamic_ncols=True,
                 smoothing=0.01,

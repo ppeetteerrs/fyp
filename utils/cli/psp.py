@@ -127,7 +127,7 @@ class PSPArch(StyleGANArchOptions, Serializable):
         {"train": PSPTrain, "generate": PSPGenerate, "mix": PSPMix}, default=PSPTrain()
     )
     """Options for active command."""
-    classes: List[str] = list_field("body", "lung", "soft")
+    classes: List[str] = list_field("body", "lung", "soft", "drr")
     """
     Image classes needed for dataset.
     (Used as `subfolders` for `MultiImageDataset`, provided as dict of Tensors.)

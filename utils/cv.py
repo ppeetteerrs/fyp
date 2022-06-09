@@ -64,7 +64,6 @@ def crop(img: AnyArr, size: Optional[Union[Tuple[int, int], int]] = None) -> Any
     row_start = (curr_h - crop_h) // 2
     col_start = (curr_w - crop_w) // 2
 
-    img = img.astype(np.float32)
     return cv.resize(
         img[row_start : row_start + crop_h, col_start : col_start + crop_w],
         (new_w, new_h),

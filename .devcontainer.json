@@ -42,6 +42,7 @@
 		"ms-python.isort"
 	],
 	"settings": {
+		"python.sortImports.path": "/home/user/mambaforge/envs/user/bin/isort",
 		"python.analysis.typeCheckingMode": "basic",
 		"python.analysis.diagnosticSeverityOverrides": {
 			"reportPrivateImportUsage": "none"

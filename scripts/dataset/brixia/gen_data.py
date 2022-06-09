@@ -3,11 +3,9 @@ from multiprocessing import Pool
 from pathlib import Path
 from typing import Tuple, cast
 
-import numpy as np
-from tqdm import tqdm
-
 warnings.filterwarnings("ignore")
 
+import cv2 as cv
 import numpy as np
 import pydicom
 import SimpleITK as sitk
@@ -29,7 +27,11 @@ def proc_item(arg: Tuple[int, Path]) -> Tuple[int, np.ndarray]:
     img = reader.Execute()
     img = sitk.RescaleIntensity(img, 0, 255)
     np_img = sitk.GetArrayFromImage(img)[0].astype(np.uint8)
-    np_img = min_max_normalize(crop(np_img, size=GEN_OPTIONS.resolution))
+    np_img = crop(np_img, size=GEN_OPTIONS.resolution)
+    if GEN_OPTIONS.equalize:
+        np_img = cv.equalizeHist(np_img)
+    np_img = np_img.astype(np.float32) / 255
+    np_img = min_max_normalize(np_img)
     return idx, np_img
 
 

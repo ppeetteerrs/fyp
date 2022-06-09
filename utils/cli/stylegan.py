@@ -42,8 +42,12 @@ class StyleGANTrain(Serializable):
     """Interval to generate samples."""
     ckpt_interval: int = 100000
     """Interval to generate checkpoints."""
-    dataset: str = "input/data/chexpert_train"
+    dataset: str = "output/chexpert/lmdb"
     """Paths to image LMDB dataset."""
+
+    # Re-training
+    restart: bool = False
+    """Restart training, i.e. resets checkpoint current step and optimizer state."""
 
 
 @dataclass

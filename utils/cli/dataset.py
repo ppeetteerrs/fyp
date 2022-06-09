@@ -21,6 +21,8 @@ class DatasetGen(Serializable):
     """Outputs png pictures instead of lmdb database."""
     resolution: Resolution = 256
     """Output image resolution."""
+    equalize: bool = False
+    """Performs Historgram Equalization for CXR datasets."""
 
 
 @dataclass

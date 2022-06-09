@@ -2,7 +2,6 @@
 from typing import cast
 
 import torch
-import wandb
 from stylegan2_torch import Discriminator, Generator
 from stylegan2_torch.loss import d_loss as get_d_loss
 from stylegan2_torch.loss import d_reg_loss as get_d_reg_loss
@@ -68,11 +67,15 @@ class Task:
             discriminator.load_state_dict(ckpt["d"])
             self.g_ema.load_state_dict(ckpt["g_ema"])
 
-            self.g_optim.load_state_dict(ckpt["g_optim"])
-            self.d_optim.load_state_dict(ckpt["d_optim"])
-
-            self.start_iter = ckpt["iter"]
             self.sample_z = ckpt["sample_z"].to("cuda")
+
+            if TRAIN_OPTIONS.restart:
+                self.start_iter = 0
+            else:
+                self.g_optim.load_state_dict(ckpt["g_optim"])
+                self.d_optim.load_state_dict(ckpt["d_optim"])
+
+                self.start_iter = ckpt["iter"]
         else:
             self.start_iter = 0
             self.sample_z = torch.randn(
@@ -273,7 +276,7 @@ class Task:
                             "sample",
                             make_grid(
                                 sample,
-                                nrow=int(TRAIN_OPTIONS.sample_size**0.5),
+                                nrow=round(TRAIN_OPTIONS.sample_size**0.5),
                                 normalize=True,
                                 value_range=(-1, 1),
                             ),

@@ -3,6 +3,7 @@ from enum import Enum
 from pathlib import Path
 from typing import List
 
+import cv2 as cv
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -72,10 +73,12 @@ class CheXpertImg:
     def img(self, base_dir: Path) -> np.ndarray:
         return plt.imread(str(base_dir / self.path))
 
-    def proc_img(self, size: int, base_dir: Path) -> np.ndarray:
+    def proc_img(self, size: int, base_dir: Path, equalize: bool) -> np.ndarray:
         img = remove_border(self.img(base_dir))
-        img = crop(img, size=size).astype(np.float32)
-        return img / 255
+        img = crop(img, size=size)
+        if equalize:
+            img = cv.equalizeHist(img)
+        return img.astype(np.float32) / 255
 
     @classmethod
     def from_str(cls, string: str) -> "CheXpertImg":

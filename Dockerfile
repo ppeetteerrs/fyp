@@ -45,8 +45,9 @@ RUN wget -q "https://github.com/conda-forge/miniforge/releases/latest/download/M
 ## Automatically activate user environment, disable logo and disable conda prompt for starship
 ENV PATH=/home/user/mambaforge/bin:$PATH
 RUN mamba init --all && \
-	conda env config vars set MAMBA_NO_BANNER=1 && \
 	conda config --set changeps1 False && \
+	echo "export MAMBA_NO_BANNER=1" >> ~/.bashrc && \
+	echo "export MAMBA_NO_BANNER=1" >> ~/.zshrc && \
 	echo "conda activate user" >> ~/.bashrc && \
 	echo "conda activate user" >> ~/.zshrc
 
@@ -55,12 +56,7 @@ SHELL ["conda", "run", "-n", "user", "/bin/bash", "-c"]
 
 # Linters and Formatters
 RUN mamba install -n base -y autoflake && \
-	mamba install -y flake8 tqdm jupyter notebook rich numpy=1.21.5 scipy matplotlib pandas seaborn && \
-	pip install ipympl && \
-	mamba install -y tensorboard python-dotenv python-lmdb pycuda scikit-learn && \
-	mamba install -y -c simpleitk simpleitk && \
-	mamba install -y -c rapidsai -c nvidia cusignal && \
-	pip install -U torch-tb-profiler stylegan2_torch lpips torchgeometry deepdrr==1.1.0a4
+	mamba install -y black isort flake8 tqdm jupyter notebook rich numpy=1.21.5 scipy matplotlib pandas seaborn
 
 # OpenCV with autocomplete
 ARG OPENCV_VERSION=4.5.5
@@ -102,8 +98,12 @@ RUN wget -q -O - https://github.com/opencv/opencv/archive/$OPENCV_VERSION.tar.gz
 	sudo apt-get update -y && \
     sudo apt-get install -y libgl1 libxrender1
 
-RUN pip install -U stylegan2-torch simple-parsing ipykernel mkdocs-jupyter mkdocs-material mkdocstrings-python torch_fidelity git+https://github.com/JoHof/lungmask
-
 RUN sudo apt-get install -y libgl1-mesa-glx xvfb
+
+RUN pip install ipympl lpips torchgeometry deepdrr==1.1.0a4 stylegan2-torch simple-parsing ipykernel mkdocs-jupyter mkdocs-material mkdocstrings-python torch-fidelity torch-tb-profiler && pip install git+https://github.com/JoHof/lungmask
+
+RUN mamba install -y python-dotenv python-lmdb pycuda scikit-learn && \
+	mamba install -y -c simpleitk simpleitk && \
+	mamba install -y -c rapidsai -c nvidia cusignal
 
 CMD "zsh"
