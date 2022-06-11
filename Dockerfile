@@ -60,10 +60,9 @@ RUN mamba install -n base -y autoflake && \
 
 # OpenCV with autocomplete
 ARG OPENCV_VERSION=4.5.5
-ARG CUDA_ARCH=8.6
 
 RUN wget -q -O - https://github.com/opencv/opencv/archive/$OPENCV_VERSION.tar.gz | tar -xzf - && \
-	git clone https://github.com/opencv/opencv_contrib.git && \
+	git clone --branch 4.5.5 --single-branch https://github.com/opencv/opencv_contrib.git && \
 	mkdir -p ~/opencv-$OPENCV_VERSION/build && \
 	cd ~/opencv-$OPENCV_VERSION/build && \
 	cmake \
