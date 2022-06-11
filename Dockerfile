@@ -58,13 +58,23 @@ SHELL ["conda", "run", "-n", "user", "/bin/bash", "-c"]
 RUN mamba install -n base -y autoflake && \
 	mamba install -y black isort flake8 tqdm jupyter notebook rich numpy=1.21.5 scipy matplotlib pandas seaborn
 
+RUN pip install ipympl lpips torchgeometry deepdrr==1.1.0a4 stylegan2-torch simple-parsing ipykernel mkdocs-jupyter mkdocs-material mkdocstrings-python torch-fidelity torch-tb-profiler && pip install git+https://github.com/JoHof/lungmask
+
+RUN mamba install -y python-dotenv python-lmdb pycuda scikit-learn && \
+	mamba install -y -c simpleitk simpleitk && \
+	mamba install -y -c rapidsai -c nvidia cusignal
+
 # OpenCV with autocomplete
 ARG OPENCV_VERSION=4.5.5
 
-RUN wget -q -O - https://github.com/opencv/opencv/archive/$OPENCV_VERSION.tar.gz | tar -xzf - && \
-	git clone --branch 4.5.5 --single-branch https://github.com/opencv/opencv_contrib.git && \
-	mkdir -p ~/opencv-$OPENCV_VERSION/build && \
-	cd ~/opencv-$OPENCV_VERSION/build && \
+RUN cd ~ && \
+	git clone https://github.com/opencv/opencv && \
+	git -C opencv checkout $OPENCV_VERSION && \
+	git clone https://github.com/opencv/opencv_contrib && \
+	git -C opencv_contrib checkout $OPENCV_VERSION && \
+	mkdir -p ~/opencv/build
+
+RUN cd ~/opencv/build && \
 	cmake \
     -D CMAKE_BUILD_TYPE=RELEASE \
     -D CMAKE_INSTALL_PREFIX=$(python3 -c "import sys; print(sys.prefix)") \
@@ -89,20 +99,13 @@ RUN wget -q -O - https://github.com/opencv/opencv/archive/$OPENCV_VERSION.tar.gz
     -D OPENCV_PYTHON3_INSTALL_PATH=$(python3 -c "from distutils.sysconfig import get_python_lib; print(get_python_lib())") \
     -D OPENCV_EXTRA_MODULES_PATH=../../opencv_contrib/modules \
     -D PYTHON3_EXECUTABLE=$(which python3) \
-    -D BUILD_EXAMPLES=OFF .. && \
+    -D BUILD_EXAMPLES=OFF .. \
+	-D BUILD_SHARED_LIBS=OFF && \
 	sudo make -j$(nproc) install && \
 	sudo ldconfig && \
 	cd ~ && \
-	sudo rm -rf ~/opencv-$OPENCV_VERSION ~/opencv_contrib && \
+	sudo rm -rf ~/opencv ~/opencv_contrib && \
 	sudo apt-get update -y && \
-    sudo apt-get install -y libgl1 libxrender1
-
-RUN sudo apt-get install -y libgl1-mesa-glx xvfb
-
-RUN pip install ipympl lpips torchgeometry deepdrr==1.1.0a4 stylegan2-torch simple-parsing ipykernel mkdocs-jupyter mkdocs-material mkdocstrings-python torch-fidelity torch-tb-profiler && pip install git+https://github.com/JoHof/lungmask
-
-RUN mamba install -y python-dotenv python-lmdb pycuda scikit-learn && \
-	mamba install -y -c simpleitk simpleitk && \
-	mamba install -y -c rapidsai -c nvidia cusignal
+    sudo apt-get install -y libgl1 libxrender1 libgl1-mesa-glx xvfb
 
 CMD "zsh"
